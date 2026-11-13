@@ -1,0 +1,2040 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="点图 · 标注记忆：选点 → 标注 → 点亮；每箱词数 100/200/300/400；封箱后可选取训练；手机点图可滑动。">
+<title>点图 · 标注记忆（融合原型 v0.4）</title>
+<style>
+/* =========================================================================
+   点图 × 拆分标注 · 融合原型
+   左/右图翼 = 点图；中央卡片 = word_trainer 拆分标注（视觉保持原样）；
+   底部读数条 = 点图 dock（点击已点亮的点，显示那里存了谁）。
+   ========================================================================= */
+:root{
+  --ink:#e9e1cf;
+  --sub:#9aa3b5;
+  --mute:#616b7e;
+  --gold:#d9bc7d;
+  --gold-bright:#f3e4b8;
+  --line:rgba(217,188,125,.20);
+  --teal:#5eead4;
+  --indigo:#818cf8;
+  --card-line:rgba(148,163,204,.16);
+  --serif:"Georgia","Times New Roman","Songti SC","STSong","SimSun",serif;
+  --sans:"Segoe UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+}
+*,*::before,*::after{ box-sizing:border-box; }
+[hidden]{ display:none !important; }
+html,body{ height:100%; }
+body{
+  margin:0; overflow:hidden;
+  background:
+    radial-gradient(1100px 800px at 50% 30%, #0d1524 0%, #070b13 55%, #04060b 100%);
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none;
+  background:radial-gradient(130% 95% at 50% 42%, transparent 55%, rgba(0,0,0,.42) 100%);
+  z-index:1;
+}
+::selection{ background:rgba(217,188,125,.28); }
+button{ font-family:inherit; }
+button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px; }
+
+.app{
+  position:relative; z-index:2;
+  height:100dvh;
+  max-width:1500px; margin:0 auto;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  padding:0 clamp(12px, 2.4vw, 30px);
+}
+
+/* ---------------------------------------------------------------- topbar */
+.topbar{
+  display:flex; align-items:center; gap:18px;
+  padding:clamp(12px,2vh,20px) 2px 8px;
+}
+.brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+.brand-title{
+  margin:0; font-family:var(--serif); font-weight:600;
+  font-size:clamp(19px,2.1vw,24px); letter-spacing:.24em; line-height:1;
+  color:var(--ink); white-space:nowrap;
+  text-shadow:0 0 26px rgba(217,188,125,.18);
+}
+.brand-title::before{
+  content:"✦"; font-family:var(--sans); font-size:.42em; color:var(--gold);
+  opacity:.7; margin-right:.55em; vertical-align:.28em; letter-spacing:0;
+}
+.brand-sub{
+  font-size:11px; letter-spacing:.1em; color:var(--mute);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.annot-progress{ flex:1; max-width:430px; display:flex; align-items:center; gap:12px; margin-left:auto; }
+.annot-progress .track{
+  flex:1; height:5px; border-radius:999px; overflow:hidden;
+  background:rgba(255,255,255,.07);
+}
+.annot-progress .track i{
+  display:block; height:100%; width:0%;
+  background:linear-gradient(90deg, rgba(94,234,212,.9), rgba(129,140,248,.9));
+  border-radius:999px; transition:width .3s ease;
+}
+.annot-count{ font-size:11.5px; letter-spacing:.05em; color:var(--sub); white-space:nowrap; }
+.top-actions{ display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+.box-pill{
+  appearance:none; font-family:inherit; cursor:pointer;
+  font-size:11.5px; letter-spacing:.06em; color:var(--gold);
+  border:1px solid rgba(217,188,125,.28); background:rgba(217,188,125,.06);
+  padding:7px 12px; border-radius:999px; white-space:nowrap;
+  transition:border-color .16s, background .16s, color .16s;
+}
+.box-pill:hover{ border-color:rgba(217,188,125,.5); background:rgba(217,188,125,.1); }
+.popover{
+  position:fixed; z-index:55; width:min(268px,84vw); padding:16px;
+  border-radius:16px; border:1px solid rgba(217,188,125,.22);
+  background:linear-gradient(180deg,#0d1524,#0a101b);
+  box-shadow:0 30px 80px rgba(0,0,0,.6);
+  animation:popIn .16s ease-out;
+}
+@keyframes popIn{ from{ opacity:0; transform:translateY(-5px); } to{ opacity:1; transform:none; } }
+.pop-title{ font-size:11px; letter-spacing:.18em; color:var(--mute); margin-bottom:10px; }
+.cap-options{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.cap-opt{
+  appearance:none; border:1px solid rgba(217,188,125,.18); background:rgba(255,255,255,.02);
+  color:var(--sub); padding:10px 0; border-radius:10px; font-family:inherit;
+  font-size:15px; cursor:pointer; transition:.14s;
+}
+.cap-opt:hover{ border-color:rgba(217,188,125,.42); color:var(--ink); }
+.cap-opt.active{ border-color:rgba(217,188,125,.6); color:var(--gold); background:rgba(217,188,125,.12); font-weight:700; }
+.pop-note{ margin:12px 0 0; font-size:10.5px; line-height:1.7; color:var(--mute); letter-spacing:.02em; }
+.btn{
+  appearance:none; border:1px solid var(--line); background:rgba(255,255,255,.02);
+  color:var(--sub); font-size:12px; letter-spacing:.08em; line-height:1;
+  padding:9px 14px; border-radius:999px; cursor:pointer; user-select:none;
+  white-space:nowrap; transition:.16s;
+}
+.btn:hover{ border-color:rgba(217,188,125,.42); color:var(--ink); background:rgba(217,188,125,.05); }
+
+/* ---------------------------------------------------------------- stage / map */
+.stage{ position:relative; min-height:0; min-width:0; }
+.map-scroll{ position:absolute; inset:0; overflow:hidden; }
+.map-scroll.scrollable{ overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; touch-action:pan-y; scrollbar-width:thin; scrollbar-color:rgba(217,188,125,.25) transparent; }
+.map-scroll.scrollable::-webkit-scrollbar{ width:6px; }
+.map-scroll.scrollable::-webkit-scrollbar-thumb{ background:rgba(217,188,125,.22); border-radius:3px; }
+#map{ display:block; width:100%; height:100%; overflow:visible; }
+
+.frame-outer{ fill:none; stroke:rgba(214,183,124,.18); stroke-width:1; }
+.frame-inner{ fill:none; stroke:rgba(214,183,124,.06); stroke-width:1; }
+.corner{ fill:rgba(214,183,124,.28); }
+.decor{ pointer-events:none; }
+
+.pt{ cursor:pointer; }
+.pt .hit{ fill:transparent; }
+.pt .ring{
+  fill:none; stroke:rgba(198,207,225,.30); stroke-width:1.2;
+  transition:stroke .16s ease, transform .16s ease;
+  transform-box:fill-box; transform-origin:center;
+}
+.pt:hover .ring{ stroke:rgba(243,228,190,.9); transform:scale(1.35); }
+.pt.target .ring{ stroke:rgba(243,228,190,.95); stroke-width:1.4; }
+.pt .halo-select{
+  fill:none; stroke:rgba(217,188,125,.6); stroke-width:1;
+  stroke-dasharray:2 5; animation:spin 9s linear infinite;
+  transform-box:fill-box; transform-origin:center;
+}
+.pt .glow{ fill:url(#litGlow); opacity:.9; }
+.pt .core{ fill:#f2e3b6; }
+.pt .spark{ fill:#fff9ea; }
+.pt.lit:hover .glow{ opacity:1; }
+.pt.lit:hover .core{ fill:#fff1c9; }
+.pt.pin .core{ fill:#fff3cf; }
+.pt .pin-ring{
+  fill:none; stroke:rgba(217,188,125,.68); stroke-width:1;
+  stroke-dasharray:1.5 3.5; animation:spin 14s linear infinite;
+  transform-box:fill-box; transform-origin:center;
+}
+.pt.anim .core{ animation:igniteCore .46s cubic-bezier(.2,.8,.3,1) both; transform-box:fill-box; transform-origin:center; }
+.pt.anim .glow{ animation:igniteGlow .62s ease-out both; transform-box:fill-box; transform-origin:center; }
+@keyframes igniteCore{
+  0%{ transform:scale(.2); opacity:0; }
+  55%{ transform:scale(1.8); opacity:1; }
+  100%{ transform:scale(1); opacity:1; }
+}
+@keyframes igniteGlow{
+  0%{ transform:scale(.4); opacity:0; }
+  60%{ transform:scale(1.5); opacity:1; }
+  100%{ transform:scale(1); opacity:.9; }
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* ---------------------------------------------------------------- annotation card (word_trainer 视觉，保持原样) */
+.annot-card{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(460px, 86vw);
+  padding:15px 18px 14px;
+  border-radius:20px;
+  border:1px solid var(--card-line);
+  background:linear-gradient(180deg, rgba(19,28,52,.97), rgba(12,18,34,.98));
+  box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  text-align:center;
+  transition:border-color .2s ease, box-shadow .2s ease;
+}
+.annot-card[data-state="annotating"]{
+  border-color:rgba(94,234,212,.30);
+  box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 40px rgba(94,234,212,.06);
+}
+.card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.chip{
+  font-size:11px; letter-spacing:.5px; color:var(--teal);
+  background:rgba(94,234,212,.10); border:1px solid rgba(94,234,212,.22);
+  padding:4px 10px; border-radius:999px; white-space:nowrap;
+}
+.level{ font-size:11px; color:var(--mute); letter-spacing:.08em; }
+
+.card-body{ min-height:150px; display:flex; flex-direction:column; }
+.annot-card[data-state="idle"] .card-body{ justify-content:center; }
+.word-row{
+  display:flex; align-items:baseline; justify-content:center; flex-wrap:nowrap;
+  min-height:58px; margin:10px 0 2px;
+  font-weight:800; line-height:1.2; letter-spacing:.5px; color:#eef2ff;
+  overflow-x:auto; padding:2px 0;
+}
+.word-row .ch{ flex:none; }
+.word-row .ch.space{ opacity:.45; font-size:.58em; transform:translateY(-.18em); }
+.word-row .cut{
+  flex:none; width:10px; height:1.12em; margin:0; padding:0; border:0;
+  background:transparent; cursor:pointer; position:relative;
+}
+.word-row .cut::after{
+  content:""; position:absolute; left:50%; top:4%; bottom:4%; width:2px;
+  transform:translateX(-50%); border-radius:2px;
+  background:rgba(148,163,204,.22); transition:.12s;
+}
+.word-row .cut:hover::after{ background:rgba(94,234,212,.6); }
+.word-row .cut.on::after{ background:var(--teal); box-shadow:0 0 10px rgba(94,234,212,.8); }
+.idle-hint{
+  min-height:58px; display:flex; align-items:center; justify-content:center;
+  font-size:13.5px; font-weight:500; letter-spacing:.04em; color:var(--mute);
+}
+.idle-hint b{ color:var(--sub); font-weight:600; }
+
+.word-meta{ margin:0; min-height:18px; font-size:12.5px; line-height:1.5; color:var(--sub); }
+.piece-preview{
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center;
+  min-height:40px; margin-top:10px;
+}
+.piece-preview .piece{
+  font-size:16px; font-weight:700; padding:5px 11px; border-radius:12px;
+  background:rgba(94,234,212,.10); border:1px solid rgba(94,234,212,.28); color:#b8fff4;
+}
+.piece-preview .pipe{ color:var(--mute); font-size:12px; }
+.piece-preview .pcount{
+  font-size:10.5px; color:var(--mute); border:1px solid var(--card-line);
+  border-radius:999px; padding:3px 9px;
+}
+.card-hint{
+  margin:8px 0 0; min-height:16px;
+  font-size:11.5px; line-height:1.55; letter-spacing:.03em; color:var(--mute);
+}
+.card-actions{ display:flex; gap:9px; margin-top:12px; }
+.btn-card{
+  appearance:none; cursor:pointer; border-radius:12px;
+  font-size:13px; font-weight:600; line-height:1; padding:11px 14px;
+  transition:.15s; white-space:nowrap;
+}
+.btn-card.ghost{
+  flex:1; min-width:80px;
+  border:1px solid var(--card-line); background:rgba(255,255,255,.04); color:#dfe6ff;
+}
+.btn-card.ghost:hover:not(:disabled){ background:rgba(255,255,255,.09); }
+.btn-card.primary{
+  flex:1.5; min-width:132px; border:0; color:#06231f; font-weight:700;
+  background:linear-gradient(135deg, #7ff3dd, #5eead4 45%, #38bdf8);
+  box-shadow:0 8px 24px rgba(94,234,212,.24);
+}
+.btn-card.primary:hover:not(:disabled){ filter:brightness(1.06); }
+.btn-card:disabled{ opacity:.32; cursor:default; box-shadow:none; }
+.btn-card:active:not(:disabled){ transform:scale(.985); }
+
+/* ---------------------------------------------------------------- dock (pointprint 读数条) */
+.dock{ display:flex; justify-content:center; padding:2px 0 calc(14px + env(safe-area-inset-bottom,0px)); }
+.dock-inner{
+  width:min(700px,100%); min-height:74px;
+  display:flex; align-items:center; gap:20px;
+  padding:12px 20px;
+  border-radius:18px;
+  border:1px solid rgba(217,188,125,.15);
+  background:linear-gradient(180deg, rgba(17,24,38,.80), rgba(8,13,22,.92));
+  box-shadow:0 20px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.035);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+}
+.dock-text{ flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.dock-primary{
+  font-size:13.5px; line-height:1.3; letter-spacing:.04em; color:var(--sub);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:20px;
+}
+.dock-primary.tone-word{
+  font-family:var(--serif); font-size:clamp(22px,2.6vw,30px);
+  line-height:1.15; letter-spacing:.01em; color:var(--ink); min-height:34px;
+}
+.dock-primary.tone-flash{ color:var(--gold-bright); }
+.dock-secondary{
+  font-size:11px; letter-spacing:.06em; line-height:1.4; color:var(--mute);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:15px;
+}
+.dock-actions{ display:flex; gap:8px; flex:0 0 auto; }
+.dock-actions:empty{ display:none; }
+.btn-mini{
+  appearance:none; display:inline-flex; align-items:center; justify-content:center;
+  border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--sub);
+  font-size:12px; line-height:1; letter-spacing:.08em; padding:9px 14px;
+  border-radius:999px; cursor:pointer; white-space:nowrap; transition:.16s;
+}
+.btn-mini:hover{ border-color:rgba(217,188,125,.45); color:var(--ink); background:rgba(217,188,125,.05); }
+.btn-mini.primary{
+  border-color:transparent;
+  background:linear-gradient(180deg, rgba(233,206,150,.95), rgba(206,173,110,.92));
+  color:#221a0b; font-weight:600;
+}
+.btn-mini.primary:hover{ background:linear-gradient(180deg, #f4ddaa, #d7b878); }
+
+/* ---------------------------------------------------------------- toast */
+.toast{
+  position:fixed; left:50%; bottom:120px; transform:translateX(-50%);
+  z-index:60; padding:10px 16px; border-radius:12px;
+  background:rgba(10,16,28,.94); border:1px solid rgba(217,188,125,.22);
+  color:var(--ink); font-size:12.5px; letter-spacing:.04em;
+  box-shadow:0 18px 50px rgba(0,0,0,.5);
+  animation:toastIn .16s ease-out;
+}
+@keyframes toastIn{ from{ opacity:0; transform:translate(-50%,6px); } to{ opacity:1; transform:translate(-50%,0); } }
+
+/* ---------------------------------------------------------------- responsive */
+@media (max-width: 900px){
+  .annot-progress{ display:none; }
+  .brand-sub{ display:none; }
+}
+@media (max-width: 720px){
+  .topbar{ gap:10px; }
+  .annot-card{ width:88vw; padding:13px 14px 12px; }
+  .card-body{ min-height:140px; }
+  .word-row{ min-height:50px; margin-top:8px; }
+  .dock-inner{ min-height:66px; padding:10px 14px; gap:12px; }
+  .dock-primary.tone-word{ font-size:22px; min-height:28px; }
+  .btn{ padding:8px 11px; font-size:11.5px; }
+  .box-pill{ display:inline-block; padding:6px 9px; font-size:11px; letter-spacing:.02em; }
+}
+@media (max-height: 640px){
+  .annot-card{ padding:11px 14px 10px; }
+  .card-body{ min-height:120px; }
+  .word-row{ min-height:44px; margin:6px 0 0; }
+  .piece-preview{ min-height:34px; margin-top:6px; }
+  .card-hint{ display:none; }
+  .dock-inner{ min-height:60px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001s !important; animation-iteration-count:1 !important;
+    transition-duration:.001s !important;
+  }
+}
+
+/* =========================================================================
+   v0.3 增补：徽标 / 回看条 / 抽屉（已标注词汇 + 箱库）/ 箱训练
+   ========================================================================= */
+.badge{
+  display:inline-block; min-width:16px; margin-left:6px; padding:1px 5px;
+  border-radius:999px; background:rgba(217,188,125,.18); color:var(--gold);
+  font-size:10px; letter-spacing:.02em; line-height:1.5; text-align:center;
+}
+.btn-mini.danger{ border-color:rgba(194,104,90,.30); color:rgba(224,150,132,.95); }
+.btn-mini.danger:hover{ border-color:rgba(194,104,90,.55); color:#f0b3a4; background:rgba(194,104,90,.08); }
+
+.viewbar{
+  position:absolute; left:50%; top:10px; transform:translateX(-50%);
+  z-index:6; display:flex; align-items:center; gap:14px;
+  padding:8px 12px 8px 16px; border-radius:999px;
+  border:1px solid rgba(194,104,90,.35);
+  background:linear-gradient(180deg, rgba(28,20,22,.92), rgba(16,11,13,.94));
+  color:rgba(233,225,207,.9); font-size:12px; letter-spacing:.05em;
+  box-shadow:0 16px 40px rgba(0,0,0,.45);
+}
+.viewbar .btn-mini{ padding:7px 12px; font-size:11.5px; }
+
+.scrim{
+  position:fixed; inset:0; z-index:35;
+  background:rgba(3,6,12,.58);
+  animation:fadeIn .18s ease-out;
+}
+@keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+
+.drawer{
+  position:fixed; top:0; right:0; bottom:0; z-index:40;
+  width:min(560px, 94vw);
+  display:flex; flex-direction:column;
+  padding:20px 18px calc(18px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg, #0b1322 0%, #080d17 100%);
+  border-left:1px solid rgba(217,188,125,.18);
+  box-shadow:-30px 0 80px rgba(0,0,0,.5);
+  animation:slideIn .26s cubic-bezier(.22,.9,.26,1);
+}
+@keyframes slideIn{ from{ transform:translateX(40px); opacity:0; } to{ transform:none; opacity:1; } }
+.drawer-head{ display:flex; align-items:center; gap:10px; }
+.drawer-head h2{
+  margin:0; font-family:var(--serif); font-weight:600; font-size:19px;
+  letter-spacing:.16em; color:var(--ink);
+}
+.drawer-meta{ font-size:11px; letter-spacing:.05em; color:var(--mute); margin-right:auto; }
+.icon-btn{
+  appearance:none; border:none; background:transparent; color:var(--mute);
+  font-size:22px; line-height:1; cursor:pointer; padding:2px 8px; border-radius:8px;
+}
+.icon-btn:hover{ color:var(--ink); background:rgba(255,255,255,.05); }
+.drawer-body{ flex:1; overflow-y:auto; overscroll-behavior:contain; margin-top:16px; padding-right:2px; }
+.drawer-body::-webkit-scrollbar{ width:6px; }
+.drawer-body::-webkit-scrollbar-thumb{ background:rgba(217,188,125,.16); border-radius:3px; }
+.drawer-tools{ display:flex; gap:10px; align-items:center; margin-bottom:14px; }
+.annot-search{
+  flex:1; min-width:120px; background:rgba(0,0,0,.28); border:1px solid var(--card-line);
+  color:#dfe6ff; border-radius:10px; padding:9px 12px; font-family:inherit; font-size:13px; outline:none;
+}
+.annot-search:focus{ border-color:rgba(94,234,212,.5); box-shadow:0 0 0 3px rgba(94,234,212,.08); }
+.drawer-empty{ margin:22px 4px; font-size:12.5px; line-height:1.9; color:var(--mute); letter-spacing:.03em; }
+
+.annot-table-wrap{ overflow-x:auto; }
+.annot-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.annot-table th{
+  text-align:left; color:var(--mute); font-weight:600; font-size:10.5px;
+  padding:4px 6px 8px; border-bottom:1px solid var(--card-line); white-space:nowrap;
+}
+.annot-table td{ padding:9px 6px; border-bottom:1px solid rgba(255,255,255,.05); vertical-align:middle; }
+.annot-table tr:last-child td{ border-bottom:0; }
+.annot-table .aw{ font-weight:700; white-space:nowrap; color:#eef2ff; }
+.annot-table .ap{ min-width:120px; }
+.annot-table .ap .piece{
+  font-size:11.5px; font-weight:600; padding:2px 7px; border-radius:8px;
+  background:rgba(94,234,212,.10); border:1px solid rgba(94,234,212,.24); color:#b8fff4;
+}
+.annot-table .ap .pipe{ color:var(--mute); font-size:10px; margin:0 2px; }
+.annot-table .an{ color:var(--sub); white-space:nowrap; }
+.annot-table .at{ color:var(--mute); white-space:nowrap; font-size:11px; }
+.annot-table .ao{ white-space:nowrap; text-align:right; }
+.annot-table .lock{ color:var(--mute); font-size:11px; }
+.link-btn{
+  border:0; background:none; color:var(--teal); font-family:inherit; font-size:11.5px;
+  cursor:pointer; padding:3px 5px; border-radius:6px;
+}
+.link-btn:hover{ background:rgba(94,234,212,.08); }
+.link-btn.del{ color:rgba(224,150,132,.95); }
+.link-btn.del:hover{ background:rgba(224,150,132,.08); }
+
+.box-card{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  border:1px solid var(--card-line); border-radius:14px;
+  background:rgba(255,255,255,.018); padding:13px 14px; margin-bottom:10px;
+}
+.box-info{ flex:1; min-width:150px; display:flex; flex-direction:column; gap:4px; }
+.box-info b{ font-size:14px; letter-spacing:.06em; color:#eef2ff; }
+.box-info span{ font-size:11px; color:var(--mute); letter-spacing:.04em; }
+.box-actions{ display:flex; gap:8px; }
+
+/* ---------------- training ---------------- */
+.train-view{
+  position:fixed; inset:0; z-index:70;
+  display:flex; flex-direction:column;
+  padding:0 clamp(12px,2.4vw,28px);
+  background:
+    radial-gradient(1000px 700px at 50% 20%, #0b1426 0%, #070b13 60%, #04060b 100%);
+}
+.train-top{ display:flex; align-items:center; gap:14px; padding:16px 2px 10px; max-width:760px; width:100%; margin:0 auto; }
+.train-mid{ flex:1; display:flex; align-items:center; gap:12px; }
+.train-mid .track{ flex:1; height:6px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
+.train-mid .track i{ display:block; height:100%; width:0%; background:linear-gradient(90deg,#7ff3dd,#5eead4 45%,#38bdf8); border-radius:999px; transition:width .3s ease; }
+.train-count{ font-size:12px; color:var(--sub); white-space:nowrap; }
+.train-box-label{ font-size:11.5px; color:var(--gold); border:1px solid rgba(217,188,125,.28); background:rgba(217,188,125,.06); padding:6px 12px; border-radius:999px; white-space:nowrap; }
+.train-main{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; position:relative; padding-bottom:20px; }
+.qcard{
+  width:min(520px, 94vw); border-radius:22px; padding:20px 22px 18px;
+  background:linear-gradient(180deg, rgba(19,28,52,.97), rgba(12,18,34,.98));
+  border:1px solid var(--card-line);
+  box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.qhead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.qchip{
+  font-size:11px; letter-spacing:.5px; color:var(--teal);
+  background:rgba(94,234,212,.10); border:1px solid rgba(94,234,212,.22);
+  padding:4px 10px; border-radius:999px;
+}
+.qlevel{ font-size:11px; color:var(--mute); letter-spacing:.08em; }
+.qword{
+  margin-top:18px; text-align:center; font-size:40px; font-weight:800;
+  letter-spacing:.5px; line-height:1.15; color:#eef2ff; word-break:break-word;
+}
+.qphon{ margin-top:4px; text-align:center; font-size:13px; color:var(--sub); min-height:18px; }
+.options{ display:flex; flex-direction:column; gap:9px; margin-top:18px; }
+.opt{
+  display:flex; align-items:center; gap:10px; width:100%;
+  border:1px solid var(--card-line); border-radius:13px;
+  background:rgba(255,255,255,.03); color:#e6ebff; font-family:inherit;
+  font-size:14px; text-align:left; padding:11px 13px; cursor:pointer; transition:.14s;
+}
+.opt:hover:not(:disabled){ border-color:rgba(94,234,212,.45); background:rgba(94,234,212,.06); }
+.opt:disabled{ cursor:default; }
+.opt-key{
+  flex:none; width:22px; height:22px; display:grid; place-items:center;
+  border-radius:7px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.08);
+  font-size:11px; color:var(--sub);
+}
+.opt.correct{ border-color:rgba(52,211,153,.7); background:rgba(52,211,153,.14); color:#c7f9e5; }
+.opt.correct .opt-key{ background:rgba(52,211,153,.25); color:#b7f7dd; }
+.opt.wrong{ border-color:rgba(251,113,133,.7); background:rgba(251,113,133,.12); color:#ffd4da; }
+.opt.dim{ opacity:.45; }
+.train-feedback{
+  position:absolute; left:50%; bottom:16px; transform:translateX(-50%);
+  width:min(520px, 94vw); border-radius:20px; padding:18px 20px 16px;
+  background:linear-gradient(180deg, rgba(19,28,52,.98), rgba(12,18,34,.99));
+  border:1px solid rgba(94,234,212,.28);
+  box-shadow:0 30px 80px rgba(0,0,0,.6); text-align:center;
+  animation:fbIn .18s ease-out;
+}
+@keyframes fbIn{ from{ opacity:0; transform:translate(-50%,10px); } to{ opacity:1; transform:translate(-50%,0); } }
+.verdict{ font-size:19px; font-weight:800; letter-spacing:.08em; color:#7ff3dd; }
+.verdict.bad{ color:#fda4af; }
+.fb-word{ margin-top:8px; font-size:22px; font-weight:700; color:#eef2ff; }
+.fb-trans{ margin-top:6px; font-size:13px; line-height:1.7; color:var(--sub); }
+.train-feedback .btn-card.primary{ margin-top:12px; width:100%; }
+.train-end{ text-align:center; color:var(--ink); }
+.end-stars{ font-size:30px; letter-spacing:.2em; color:var(--gold); }
+.end-stars .off{ color:rgba(255,255,255,.12); }
+.train-end h2{ margin:10px 0 6px; font-size:22px; letter-spacing:.1em; }
+.train-end p{ margin:0; color:var(--sub); font-size:13px; line-height:1.8; }
+.train-end-actions{ display:flex; gap:10px; margin-top:20px; justify-content:center; }
+.train-end-actions .btn-card{ flex:0 0 auto; min-width:130px; }
+
+@media (max-width: 720px){
+  .top-actions .btn{ padding:7px 9px; font-size:11px; }
+  .drawer{ width:100vw; }
+  .train-top{ padding-top:12px; }
+  .qword{ font-size:32px; }
+  .qcard{ padding:16px 16px 14px; }
+  .train-feedback{ bottom:10px; }
+  .viewbar{ top:6px; font-size:11px; padding:6px 10px 6px 12px; }
+}
+
+/* =========================================================================
+   v0.5 增补：存档菜单（导出/导入/安装到主屏幕）+ 导入确认弹窗
+   ========================================================================= */
+.icon-only{ padding:7px 10px; font-size:16px; letter-spacing:0; line-height:1; }
+.menu-pop{ width:min(300px,86vw); padding:10px; }
+.menu-item{
+  display:block; width:100%; text-align:left; appearance:none;
+  border:1px solid transparent; background:transparent; border-radius:10px;
+  color:var(--sub); font-family:inherit; font-size:13px; letter-spacing:.03em;
+  padding:11px 12px; cursor:pointer; transition:.14s;
+}
+.menu-item:hover{ border-color:rgba(217,188,125,.25); background:rgba(217,188,125,.06); color:var(--ink); }
+.menu-item + .menu-item{ margin-top:2px; }
+.menu-pop .pop-note{ margin:8px 6px 4px; }
+
+.modal-wrap{
+  position:fixed; inset:0; z-index:80; display:grid; place-items:center;
+  padding:20px; background:rgba(3,6,12,.66);
+  backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px);
+}
+.modal{
+  width:min(440px,100%); padding:20px 22px 18px; border-radius:18px;
+  border:1px solid rgba(217,188,125,.22);
+  background:linear-gradient(180deg,#0e1626,#0a101c);
+  box-shadow:0 40px 100px rgba(0,0,0,.65);
+  animation:modalIn .18s ease-out;
+}
+@keyframes modalIn{ from{ opacity:0; transform:translateY(8px) scale(.99); } to{ opacity:1; transform:none; } }
+.modal h3{ margin:0 0 10px; font-family:var(--serif); font-weight:600; font-size:18px; letter-spacing:.1em; color:var(--ink); }
+.modal-body{ margin:0; font-size:13px; line-height:1.85; letter-spacing:.02em; color:var(--sub); white-space:pre-line; }
+.modal-actions{ display:flex; justify-content:flex-end; gap:9px; margin-top:18px; flex-wrap:wrap; }
+.modal-actions .btn-mini{ padding:10px 14px; }
+
+@media (max-width: 720px){
+  .icon-only{ padding:6px 8px; font-size:14px; }
+}
+
+</style>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#080d1a">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1 class="brand-title">点图</h1>
+      <span class="brand-sub">标注记忆 · 融合原型</span>
+    </div>
+    <div class="annot-progress" title="拆分标注进度">
+      <div class="track"><i id="annotFill"></i></div>
+      <span class="annot-count" id="annotCount">已标注 0 / 7838</span>
+    </div>
+    <div class="top-actions">
+      <button class="box-pill" id="boxPill" title="调整每箱词数">第 1 箱 · 0 / 100 ▾</button>
+      <button class="btn ghost" id="annotatedBtn">已标注词汇</button>
+      <button class="btn ghost" id="boxesBtn">箱库<span class="badge" id="boxesBadge">0</span></button>
+      <button class="btn ghost icon-only" id="menuBtn" title="存档 / 安装到主屏幕" aria-label="存档菜单">⋯</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="map-scroll" id="mapScroll">
+      <svg id="map" role="group" aria-label="点图"></svg>
+    </div>
+
+    <section class="annot-card" id="card" data-state="idle" aria-label="拆分标注">
+      <div class="card-head">
+        <span class="chip">拆分标注 · 1~3 份</span>
+        <span class="level" id="cardLevel">CET4</span>
+      </div>
+      <div class="card-body">
+        <div class="word-row" id="wordRow"></div>
+        <p class="word-meta" id="wordMeta"></p>
+        <div class="piece-preview" id="piecePreview"></div>
+        <p class="card-hint" id="cardHint">在图中点一个空位</p>
+      </div>
+      <div class="card-actions">
+        <button class="btn-card ghost" id="skipBtn" disabled>跳过</button>
+        <button class="btn-card ghost" id="clearBtn" disabled>清空切分</button>
+        <button class="btn-card primary" id="saveBtn" disabled>保存并点亮</button>
+      </div>
+    </section>
+
+    <div class="viewbar" id="viewbar" hidden>
+      <span id="viewbarText">回看第 1 箱</span>
+      <button class="btn-mini" id="backToCurrent">返回当前箱</button>
+    </div>
+  </main>
+
+  <footer class="dock" id="dock" aria-live="polite"></footer>
+</div>
+
+<div class="popover menu-pop" id="menuPopover" hidden>
+  <button class="menu-item" id="exportBtn">导出存档（JSON）</button>
+  <button class="menu-item" id="importBtn">导入存档…</button>
+  <button class="menu-item" id="installBtn" hidden>安装到主屏幕</button>
+  <p class="pop-note">导出文件可在另一台设备「合并导入」，多设备长期积累；换设备/清缓存前建议导出。</p>
+</div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<div class="modal-wrap" id="importModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <h3 id="importTitle">导入存档</h3>
+    <p class="modal-body" id="importSummary"></p>
+    <div class="modal-actions">
+      <button class="btn-mini" id="importCancel">取消</button>
+      <button class="btn-mini primary" id="importMerge">合并导入</button>
+      <button class="btn-mini" id="importReplace">覆盖导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="popover" id="capPopover" hidden>
+  <div class="pop-title">每箱词数</div>
+  <div class="cap-options" id="capOptions"></div>
+  <p class="pop-note">地图固定 400 点；每箱达到目标词数后封箱为主操作，也可以提前封箱。</p>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="drawer" id="drawer" aria-hidden="true" hidden>
+  <div class="drawer-head">
+    <h2 id="drawerTitle">已标注词汇</h2>
+    <span class="drawer-meta" id="drawerMeta"></span>
+    <button class="icon-btn" id="drawerClose" aria-label="关闭">×</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<!-- 训练：词库 = 已封箱的箱子，箱子来自「箱库」选择 -->
+<section class="train-view" id="trainView" hidden aria-label="箱训练">
+  <header class="train-top">
+    <button class="icon-btn" id="trainQuit" title="退出训练">✕</button>
+    <div class="train-mid">
+      <div class="track"><i id="trainFill"></i></div>
+      <span class="train-count" id="trainCount">1 / 10</span>
+    </div>
+    <span class="train-box-label" id="trainBoxLabel">第 1 箱</span>
+  </header>
+  <main class="train-main">
+    <div class="qcard" id="trainCard">
+      <div class="qhead">
+        <span class="qchip">看词选义</span>
+        <span class="qlevel" id="trainLevel">CET4</span>
+      </div>
+      <div class="qword" id="trainWord">word</div>
+      <div class="qphon" id="trainPhon"></div>
+      <div class="options" id="trainOptions"></div>
+    </div>
+    <div class="train-feedback" id="trainFeedback" hidden>
+      <div class="verdict" id="trainVerdict">答对了</div>
+      <div class="fb-word" id="trainFbWord"></div>
+      <div class="fb-trans" id="trainFbTrans"></div>
+      <button class="btn-card primary" id="trainNext">继续 <kbd>Enter</kbd></button>
+    </div>
+    <div class="train-end" id="trainEnd" hidden>
+      <div class="end-stars" id="trainStars"></div>
+      <h2 id="trainEndTitle">这一箱练完了</h2>
+      <p id="trainEndSub"></p>
+      <div class="train-end-actions">
+        <button class="btn-card ghost" id="trainBack">回到点图</button>
+        <button class="btn-card primary" id="trainAgain">再练一遍</button>
+      </div>
+    </div>
+  </main>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* demo word pool for the fusion prototype: 600 CET words (mid-frequency slice of word_trainer/data/words.json; budget forced first) */
+window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],["replace","riˈpleis","vt","代替、替换","cet4","894"],["seat","siːt","n/vt/vi","座、座位","cet4","894"],["post","pəust","n/vt/vi/ad","柱、杆","cet4","895"],["procedure","prəˈsiːdʒə","n","程序、过程","cet4","897"],["commission","kəˈmiʃən","n/vt","委任状、任官令","cet4","898"],["trial","ˈtraiəl","n/a","审判、试验","cet4","898"],["expert","ˈekspəːt","n/a","专家、行家","cet4","899"],["proposal","prəˈpəuzl","n","提议、计划","cet4","899"],["spring","spriŋ","n/a/vi/vt","春天、弹簧","cet4","901"],["unless","ʌnˈles","conj/prep","除非","cet4","901"],["mention","ˈmenʃən","n/vt","提到、言及","cet4","902"],["democrat","ˈdeməkræt","n","民主人士、民主主义者","cet4","903"],["improve","imˈpruːv","vt/vi","改良、提高...的价值","cet4","903"],["radio","ˈreidiəu","n/v","无线电、收音机","cet4","904"],["circumstance","ˈsəːkəmstəns","n","环境、状况","cet4","905"],["client","ˈklaiənt","n","客户、顾客","cet4","907"],["obviously","ˈɔbviəsli","ad","显而易见地、明显地","cet4","908"],["imagine","iˈmædʒin","vt/vi","想像、设想","cet4","909"],["sector","ˈsektə","n/vt","扇形、部门","cet4","909"],["direction","diˈrekʃən","n","方向、指导","cet4","910"],["tonight","təˈnait","n/ad","今晚、今夜","cet4","910"],["basic","ˈbeisik","n/a","基本原理、要素","cet4","911"],["huge","hjuːdʒ","a","极大的、巨大的","cet4","911"],["ball","bɒːl","n/v","球、舞会","cet4","912"],["successful","səkˈsesful","a","成功的、一帆风顺的","cet4","915"],["yourself","juəˈself","pron","你自己","cet4","915"],["intend","inˈtend","vt","计划、打算","cet4","916"],["original","əˈridʒənl","a/n","最初的、原始的","cet4","918"],["impact","ˈimpækt","n/vt","冲击、冲突","cet4","919"],["attitude","ˈætitjuːd","n","态度、看法","cet4","920"],["respond","riˈspɒnd","vt/vi","以...回答","cet4","920"],["aware","əˈwєə","a","知道的、有觉悟的","cet4","921"],["discover","disˈkʌvə","vt/vi","发现、找到","cet4","923"],["popular","ˈpɒpjulə","a","通俗的、流行的","cet4","924"],["traditional","trəˈdiʃənl","a","传统的、惯例的","cet4","925"],["onto","ˈɒntuː","prep","在...之上","cet4","926"],["reveal","riˈviːl","vt/n","露出、显示","cet4","927"],["weapon","ˈwepən","n/vt","武器、兵器","cet4","929"],["employee","emplɒiˈiː","n","职员、员工","cet4","930"],["cultural","ˈkʌltʃərəl","a","文化的、教养的","cet4","932"],["employment","imˈplɒimənt","n","雇用、职业","cet4","933"],["peace","piːs","n/vi","和平、和约","cet4","933"],["refuse","riˈfjuːz","vt/vi/n/a","拒绝、谢绝","cet4","936"],["pain","pein","n/vt/vi","痛苦、疼痛","cet4","937"],["prevent","priˈvent","v","预防、防止","cet4","937"],["October","ɒkˈtəubə","n","十月","cet4","940"],["affair","əˈfєə","n","事件、事务","cet4","941"],["appeal","əˈpiːl","n/vi/vt","恳求、诉请","cet4","942"],["shake","ʃeik","n/vt/vi","摇动、震动","cet4","942"],["fly","flai","n/vi/vt/a","苍蝇、两翼昆虫","cet4","943"],["heavy","ˈhevi","a/ad/n","重的、巨大的","cet4","943"],["interview","ˈintəvjuː","n/vt","面谈、访问","cet4","944"],["regard","riˈgɑːd","n/vt/vi","关心、注意","cet4","945"],["chair","tʃєə","n/vt","椅子、显要的席位","cet4","946"],["fish","fiʃ","n/vt/vi","鱼、鱼肉","cet4","947"],["professional","prəˈfeʃənl","n/a","专业人才","cet4","947"],["holiday","ˈhɒlədi","n/vi","假日、假期","cet4","948"],["camera","ˈkæmərə","n","照相机、摄影机","cet4","949"],["technique","tekˈniːk","n","技巧、技术","cet4","949"],["item","ˈaitəm","n","项目、条款","cet4","950"],["medium","ˈmiːdiəm","n/a","媒体、方法","cet4","951"],["politics","ˈpɒlitiks","n","政治、政治学","cet4","951"],["pupil","ˈpjuːpl","n","学生、门生","cet4","952"],["perform","pəˈfɒːm","vt/vi","进行、履行","cet4","953"],["version","ˈvəːʒən","n","一种描述、版本","cet4","953"],["weight","weit","n/vt","重、重量","cet4","954"],["candidate","ˈkændideit","n","候选人、投考者","cet4","957"],["okay","əjˈkei","a/ad/n/vt","好、可以","cet4","957"],["direct","diˈrekt","a/vt/vi/ad","直接的、坦白的","cet4","960"],["press","pres","n/vt/vi","压、揿","cet4","961"],["advice","ədˈvais","n","忠告、劝告","cet4","962"],["trip","trip","n/vt/vi","旅行、绊倒","cet4","962"],["inside","ˈinˈsaid","n/a/ad/prep","内部、内脏","cet4","964"],["September","sepˈtembə","n","九月","cet4","964"],["library","ˈlaibrəri","n","图书馆、藏书","cet4","967"],["adult","ˈædʌlt","n/a","成人、成虫","cet4","969"],["advantage","ədˈvɑːntidʒ","n/vt","优点、便利","cet4","969"],["operate","ˈɒpəreit","v","操作、运转","cet4","970"],["worry","ˈwʌri","n/vt/vi","担心、烦恼","cet4","970"],["surface","ˈsəːfis","n/a/vt/vi","面、表面","cet4","971"],["immediately","iˈmiːdiətli","ad","直接地、立刻","cet4","974"],["deep","diːp","a/ad/n","深的","cet4","975"],["worth","wəːθ","n/a","价值、财产","cet4","975"],["edge","edʒ","n/vt/vi","边缘、尖锐","cet4","977"],["variety","vəˈraiəti","n","多样、种类","cet4","977"],["writer","ˈraitə","n","作家、撰稿者","cet4","980"],["trouble","ˈtrʌbl","n/vt/vi","烦恼、麻烦","cet4","981"],["island","ˈailənd","n/vt","岛、岛屿","cet4","982"],["challenge","ˈtʃælindʒ","n/vt/vi","挑战、盘问","cet4","984"],["January","ˈdʒænjuəri","n","一月","cet4","984"],["fear","fiə","n/v","恐怖、害怕","cet4","985"],["shoulder","ˈʃəuldə","n/vt/vi","肩、肩膀","cet4","986"],["useful","ˈjuːsful","a","有用的、有益的","cet4","986"],["depend","diˈpend","vi","靠、视...而定","cet4","987"],["middle","ˈmidl","n/a","中央、中间","cet4","988"],["Sunday","ˈsʌndi","n/a/vi","星期日","cet4","988"],["majority","məˈdʒɒriti","n","多数、大半","cet4","989"],["dream","driːm","n/v","梦、空想","cet4","990"],["extent","ikˈstent","n","范围、程度","cet4","990"],["bar","bɑː","n/vt","条、棒","cet4","991"],["enable","iˈneibl","vt","使能够","cet4","991"],["beautiful","ˈbjuːtiful","a","美丽的","cet4","992"],["competition","kɒmpiˈtiʃən","n","竞争、竞赛","cet4","992"],["instead","inˈsted","ad","作为替代、反而","cet4","994"],["parliament","ˈpɑːləmənt","n","国会、议会","cet4","994"],["goods","guds","n","货物","cet4","995"],["speaker","ˈspiːkə","n","说话人、讲演者","cet4","996"],["stuff","stʌf","n/vt/vi","原料、要素","cet4","996"],["complete","kəmˈpliːt","a/vt","完全的、十足的","cet4","998"],["access","ˈækses","n/vt","通路、入口","cet4","999"],["somebody","ˈsʌmbɒdi","n/pron","了不起的人、大人物","cet4","1000"],["magazine","mægəˈziːn","n","杂志、仓库","cet4","1001"],["text","tekst","n","文本、正文","cet4","1002"],["soldier","ˈsəuldʒə","n/vi","军人、士兵","cet4","1003"],["thirty","ˈθəːti","num","三十、三十个","cet4","1003"],["easily","ˈiːzili","ad","容易地、轻易地","cet4","1004"],["sexual","ˈsekʃuəl","a","性的、性别的","cet4","1006"],["effective","iˈfektiv","a/n","有效的、有力的","cet4","1007"],["bag","bæg","n/vt","袋子、袋状物","cet4","1008"],["western","ˈwestən","n/a","西方人、西部片","cet4","1008"],["heat","hiːt","n/vi/vt","热、热度","cet4","1009"],["payment","ˈpeimənt","n","付款、支付的款项(或实物)","cet4","1009"],["marriage","ˈmæridʒ","n","婚姻、结婚","cet4","1011"],["mouth","mauθ","n/vi/vt","嘴、口","cet4","1011"],["tough","tʌf","n/a","恶棍","cet4","1012"],["independent","indiˈpendənt","n/a","独立自主者、无党派者","cet4","1013"],["sing","siŋ","vi/vt/n","唱、唱歌","cet4","1013"],["facility","fəˈsiliti","n","容易、灵巧","cet4","1014"],["survey","səˈvei","n/vt/vi","纵览、视察","cet4","1015"],["reference","ˈrefərəns","n/vt/vi","参考、索引","cet4","1016"],["context","ˈkɒntekst","n","上下文、背景","cet4","1019"],["skin","skin","n/vt/vi","皮肤、皮","cet4","1019"],["agent","ˈeidʒənt","n","代理商、政府代表","cet4","1020"],["owner","ˈəunə","n","拥有者、物主","cet4","1021"],["extend","ikˈstend","v","扩充、延伸","cet4","1023"],["gas","gæs","n","气体、汽油","cet4","1023"],["ahead","əˈhed","a/ad","领先的、预先的","cet4","1025"],["importance","imˈpɒːtəns","n","重要、重要性","cet4","1025"],["earth","əːθ","n/vt/vi","地球、泥土","cet4","1026"],["generation","dʒenəˈreiʃən","n","一代、一世","cet4","1026"],["commercial","kəˈməːʃəl","a/n","商业的、商用的","cet4","1027"],["address","əˈdres","n/vt","住址、演说","cet4","1028"],["object","ˈɒbdʒekt","n/vi/vt","物体、目标","cet4","1028"],["cancer","ˈkænsə","n","癌、恶性肿瘤","cet4","1029"],["possibility","pɒsəˈbiliti","n","可能性、可能的事","cet4","1030"],["involved","inˈvɔlvd","a","难懂的、复杂的","cet4","1031"],["interesting","ˈintristiŋ","a","有趣的","cet4","1032"],["reality","riˈæliti","n","实在、事实","cet4","1032"],["coach","kəutʃ","n/vt/vi","四轮大马车、教练","cet4","1033"],["means","miːnz","n","方法、手段","cet4","1033"],["notice","ˈnəutis","n/vt/vi","注意、布告","cet4","1034"],["yard","jɑːd","n","码、庭院","cet4","1035"],["beat","biːt","n/v/a","心跳(声)、打","cet4","1036"],["planning","","n","计划的制订、策划","cet4","1037"],["violence","ˈvaiələns","n","猛烈、暴力","cet4","1037"],["collection","kəˈlekʃən","n","收集、采集","cet4","1038"],["communication","kə.mjuːniˈkeiʃən","n","交流、交通","cet4","1039"],["fifty","ˈfifti","num","五十、五十个","cet4","1041"],["considerable","kənˈsidərəbl","a","相当的、可观的","cet4","1042"],["finger","ˈfiŋgə","n/v","手指、指状物","cet4","1042"],["arise","əˈraiz","vi","站立、出现","cet4","1043"],["species","ˈspiːʃiz","n","种、类","cet4","1044"],["fit","fit","n/a/vt/vi","适宜、合身","cet4","1046"],["partner","ˈpɑːtnə","n/vt/vi","合伙人、股东","cet4","1048"],["supply","səˈplai","n/vt/vi","补给、供给","cet4","1048"],["positive","ˈpɒzitiv","a","肯定的、积极的","cet4","1049"],["civil","ˈsivəl","a","市民的、公民的","cet4","1050"],["examine","igˈzæmin","v","检查、调查","cet4","1050"],["kitchen","ˈkitʃin","n","厨房、全套炊具","cet4","1051"],["consumer","kənˈsjuːmə","n","消费者","cet4","1052"],["document","ˈdɒkjumənt","n/vt","文件、公文","cet4","1052"],["define","diˈfain","vt","定义、规定","cet4","1053"],["shot","ʃɒt","n/vt/a","发射、炮弹","cet4","1053"],["responsible","riˈspɒnsəbl","a","有责任的、负责的","cet4","1054"],["painting","ˈpeintiŋ","n","画、绘画","cet4","1056"],["scientist","ˈsaiəntist","n","科学家","cet4","1057"],["safe","seif","n/a","保险箱、冷藏室","cet4","1058"],["solution","səˈluːʃən","n","解决、解答","cet4","1058"],["November","nəuˈvembə","n","十一月","cet4","1059"],["December","diˈsembə","n","十二月","cet4","1060"],["influence","ˈinfluəns","n/vt","影响力、权力","cet4","1061"],["existing","i^ˈzistiŋ","a","存在的、目前的","cet4","1063"],["victim","ˈviktim","n","受害人、牺牲者","cet4","1063"],["newspaper","ˈnjuːz.peipə","n","报纸","cet4","1064"],["software","ˈsɒftwєə","n.","软件","cet4","1064"],["bear","bєə","n/vt/vi","熊","cet4","1065"],["threat","θret","n","恐吓、恶兆","cet4","1066"],["opinion","əˈpinjən","n","意见、评价","cet4","1067"],["attorney","əˈtəːni","n","代理人、律师","cet4","1069"],["score","skɒː","n/vt/vi","得分、抓痕","cet4","1070"],["district","ˈdistrikt","n","区域、地方","cet4","1071"],["bird","bəːd","n/vi","鸟、羽毛球","cet4","1072"],["audience","ˈɒːdiəns","n","听众、观众","cet4","1074"],["damage","ˈdæmidʒ","n/v","损害、伤害","cet4","1074"],["rich","riːtʃ","a","富裕的、富饶的","cet4","1075"],["tomorrow","təˈmɒːrəu","n/ad","明天、未来","cet4","1075"],["dinner","ˈdinə","n","晚餐、正餐","cet4","1076"],["requirement","riˈkwaiəmənt","n","需求、必要条件","cet4","1078"],["vote","vəut","n/vi/vt","投票、选举","cet4","1078"],["extra","ˈekstrə","n/a/ad","额外的事物、另外的收费","cet4","1080"],["travel","ˈtrævl","n/vi/vt","旅行、游历","cet4","1081"],["debate","diˈbeit","n/v","辩论、讨论","cet4","1082"],["citizen","ˈsitizn","n","市民、公民","cet4","1084"],["exchange","iksˈtʃeindʒ","n/v","交换、(电话)交换局","cet4","1084"],["quarter","ˈkwɒːtə","n/vt/vi","四分之一、一刻钟","cet4","1085"],["none","nʌn","ad/pron/a","一点也不、毫不","cet4","1086"],["option","ˈɒpʃən","n","选择权、挑选","cet4","1086"],["front","frʌnt","n/vt/vi","前面、开头","cet4","1087"],["born","bɒːn","a","天生的","cet4","1088"],["opposition","ɒpəˈziʃən","n","反对、敌对","cet4","1088"],["eventually","iˈventʃuəli","ad","最后、终于","cet4","1089"],["occasion","əˈkeiʒən","n/vt","场合、时机","cet4","1090"],["senior","ˈsiːnjə","n/a","年长者、资深者","cet4","1090"],["highly","ˈhaili","ad","非常、非常赞许地","cet4","1091"],["arrangement","əˈreindʒmənt","n","排列、整齐","cet4","1092"],["wind","wind","n/vt/vi","风、气息","cet4","1092"],["key","kiː","n/vt/vi","钥匙、键","cet4","1093"],["mission","ˈmiʃən","n/vt","任务、代表团","cet4","1095"],["target","ˈtɑːgit","n/vt","目标、靶子","cet4","1095"],["aid","eid","n/vt/vi","帮助、外援","cet4","1096"],["fast","fɑːst","a/ad/n/vi","快速的、紧的","cet4","1096"],["alone","əˈləun","a/ad","孤独的、单独的","cet4","1097"],["match","mætʃ","n/vt/vi","比赛、火柴","cet4","1097"],["railway","ˈreilwei","n","铁路、轨道","cet4","1099"],["attend","əˈtend","vt/vi","参加、照料","cet4","1100"],["speech","spiːtʃ","n","演讲、说话","cet4","1100"],["concept","ˈkɒnsept","n","观念、概念","cet4","1101"],["lack","læk","n/vt/vi","缺乏、无","cet4","1103"],["participant","pɑːˈtisipənt","n/a","参加者、参与者","cet4","1103"],["corner","ˈkɒːnə","n/vt/vi","角落、转角","cet4","1104"],["southern","ˈsʌðən","n/a","南方人、男风","cet4","1105"],["fresh","freʃ","a/ad/n","新鲜的、新奇的","cet4","1107"],["forest","ˈfɒrist","n/vt","森林、林区","cet4","1108"],["video","ˈvidiəu","n/a","影像、电视","cet4","1109"],["global","ˈgləubl","a","通用的、全球的","cet4","1110"],["senate","ˈsenit","n","参议院、立法机构","cet4","1111"],["slightly","ˈslaitli","ad","些微地、苗条地","cet4","1111"],["reform","riˈfɒːm","n/vt/vi","改革、改正","cet4","1112"],["gain","gein","n/vt/vi","增益、获得","cet4","1113"],["restaurant","ˈrestərɒŋ","n","餐馆、饭店","cet4","1114"],["judge","dʒʌdʒ","n/vt/vi","法官、裁判员","cet4","1115"],["scale","skeil","n/vt/vi","刻度、衡量","cet4","1115"],["equipment","iˈkwipmənt","n","装备、设备","cet4","1117"],["afternoon","ˈɑːftəˈnuːn","n","午后、下午","cet4","1118"],["release","riˈliːs","n/vt","释放、发泄","cet4","1120"],["labor","ˈleibə","n/vi/vt","劳动、努力","cet4","1123"],["credit","ˈkredit","n/vt","信用、信任","cet4","1125"],["critical","ˈkritikəl","a","批评的、决定性的","cet4","1126"],["male","meil","n/a","男人、雄性动物","cet4","1126"],["review","riˈvjuː","n/vt/vi","检讨、复习","cet4","1128"],["recall","riˈkɒːl","n/vt","回忆、召回","cet4","1129"],["interested","ˈintristid","a","感兴趣的","cet4","1131"],["stare","stєə","vi/vt/n","注视、凝视","cet4","1131"],["safety","ˈseifti","n/vt","安全、保险","cet4","1132"],["otherwise","ˈʌðəwaiz","ad","否则、不同地","cet4","1133"],["hill","hil","n/vt","小山、丘陵","cet4","1134"],["neighborhood","ˈneibəhud","n","附近、邻近","cet4","1134"],["hardly","ˈhɑːdli","ad","刚刚、几乎不","cet4","1135"],["below","biˈləu","prep/ad","在下面","cet4","1136"],["status","ˈsteitəs","n","状态、情形","cet4","1137"],["troop","truːp","n/vi","军队、一群","cet4","1137"],["expression","ikˈspreʃən","n","表达、表现","cet4","1139"],["hurt","həːt","n/v","伤害、创伤","cet4","1140"],["tea","tiː","n","茶、茶叶","cet4","1140"],["Christmas","ˈkrisməs","n","圣诞节","cet4","1142"],["sale","seil","n","出售、卖","cet4","1143"],["track","træk","n/vt/vi","轨迹、足迹","cet4","1143"],["band","bænd","n/v","带子、队","cet4","1145"],["strike","straik","n/vt/vi","罢工、打击","cet4","1145"],["failure","ˈfeiljə","n","失败、失败者","cet4","1147"],["sky","skai","n/vt/vi","天空、天色","cet4","1147"],["freedom","ˈfriːdəm","n","自由、坦率","cet4","1148"],["reader","ˈriːdə","n","读者、读物","cet4","1148"],["fair","fєə","n/a/ad/vi","展览会、市集","cet4","1150"],["plane","plein","n/a/vt/vi","平面、扁平物","cet4","1150"],["nobody","ˈnəubɒdi","n/pron","小人物、无名小卒","cet4","1151"],["essential","iˈsenʃəl","n/a","要素、要点","cet4","1155"],["confirm","kənˈfəːm","vt","证实、确定","cet4","1156"],["adopt","əˈdɒpt","vt","采用、正式通过","cet4","1157"],["powerful","ˈpauəful","a","有力的、有权力的","cet4","1159"],["Saturday","ˈsætədi","n","星期六","cet4","1159"],["perfect","ˈpəːfikt","n/a/vt","完成时","cet4","1160"],["trust","trʌst","n/a/vt/vi","信任、信赖","cet4","1160"],["conduct","ˈkɔndʌktˌ -dəkt","n/vt/vi","行为、举动","cet4","1162"],["conversation","kɒnvəˈseiʃən","n","会话、说话","cet4","1164"],["touch","tʌtʃ","n/vt/vi","触觉、碰","cet4","1166"],["farm","fɑːm","n/vt/vi","农场、农田","cet4","1167"],["sentence","ˈsentəns","n/vt","句子、命题","cet4","1168"],["file","fail","n/vi/vt","档案、公文箱","cet4","1170"],["primary","ˈpraiməri","n/a","最主要者、原色","cet4","1172"],["sleep","sliːp","n/vi/vt","睡眠、静止","cet4","1172"],["obvious","ˈɒbviəs","a","明显的、明白的","cet4","1173"],["length","leŋθ","n","长度、长","cet4","1174"],["copy","ˈkɒpi","n/v","副本、摹仿","cet4","1175"],["investigation","in.vestiˈgeiʃən","n","调查、审查","cet4","1175"],["balance","ˈbæləns","n/vi/vt","平衡、差额","cet4","1176"],["nuclear","ˈnjuːkliə","a","核子的、原子能的","cet4","1176"],["researcher","riːˈsəːtʃə","n","研究人员","cet4","1177"],["branch","bræntʃ","n/vi/vt","树枝、支店","cet4","1178"],["conflict","ˈkɒnflikt","n/vi","战斗、冲突","cet4","1179"],["spirit","ˈspirit","n/vt","精神、心灵","cet4","1180"],["league","liːg","n/v","同盟、联盟","cet4","1181"],["doubt","daut","n/v","怀疑、疑惑","cet4","1183"],["train","trein","n/vt/vi","火车、列车","cet4","1186"],["accident","ˈæksidənt","n","意外事件、机遇","cet4","1187"],["camp","kæmp","n/vi/vt","露营、帐篷","cet4","1188"],["February","ˈfebruəri","n","二月","cet4","1188"],["brain","brein","n/vt","脑","cet4","1189"],["studio","ˈstjuːdiəu","n","工作室、画室","cet4","1191"],["am","æm","","be的单数第一人称","cet4","1192"],["weekend","ˈwiːkend","n","周末、周末休假","cet4","1193"],["dozen","ˈdʌzn","n/a","打、十二个","cet4","1194"],["strength","streŋθ","n","力量、实力","cet4","1194"],["normally","ˈnɒːməli","ad","正规地、合规则","cet4","1195"],["contact","ˈkɒntækt","n/vi/vt","联系、交际","cet4","1196"],["insurance","inˈʃurəns","n","保险、保险业","cet4","1197"],["battle","ˈbætl","n/v","战役","cet4","1199"],["beginning","biˈginiŋ","n","开始","cet4","1200"],["shape","ʃeip","n/vt/vi","形状、形态","cet4","1200"],["contribution","kɒntriˈbjuːʃən","n","捐助、捐助之物","cet4","1201"],["transport","trænsˈpɒːt","n/vt","运输、运输工具","cet4","1202"],["cash","kæʃ","n/vt","现金","cet4","1204"],["crisis","ˈkraisis","n","危机、危险期","cet4","1206"],["fan","fæn","n/vt/vi","风扇、迷","cet4","1208"],["museum","mjuːˈziəm","n","博物馆","cet4","1209"],["stick","stik","n/vt/vi","棍、棒","cet4","1209"],["hole","həul","n/vt/vi","孔、洞","cet4","1213"],["pair","pєə","n/v","一双、一对","cet4","1213"],["annual","ˈænjuəl","n/a","年刊、年报","cet4","1215"],["associate","əˈsəuʃieit","n/vt/vi","同伴、伙伴","cet4","1216"],["vision","ˈviʒən","n/vt","视觉、眼光","cet4","1216"],["marry","ˈmæri","vt/vi","与...结婚、娶","cet4","1217"],["presence","ˈprezns","n","出席、面前","cet4","1219"],["ship","ʃip","n/vt/vi","船、舰","cet4","1219"],["protection","prəˈtekʃən","n","保护、防卫","cet4","1220"],["collect","kəˈlekt","v/a/ad","收集、聚集","cet4","1222"],["queen","ˈkwiːn","n/vt/vi","王后、女王","cet4","1223"],["master","ˈmɑːstə. ˈmæstə","n/a/vt","主人、硕士","cet4","1224"],["driver","ˈdraivə","n","驾驶员、驱动器","cet4","1225"],["meaning","ˈmiːniŋ","n/a","意义、含义","cet4","1226"],["spot","spɒt","n/a/vt/vi","污点、地点","cet4","1228"],["ice","ais","n/vt/vi","冰、冰淇淋","cet4","1230"],["boat","bəut","n/vi/vt","船","cet4","1231"],["employ","imˈplɒi","n/vt","雇用","cet4","1231"],["drink","driŋk","n/v","饮料、酒","cet4","1232"],["exercise","ˈeksəsaiz","n/vt/vi","行使、执行","cet4","1233"],["consequence","ˈkɒnsikwəns","n","结果、重要性","cet4","1234"],["distance","ˈdistəns","n","距离、远方","cet4","1235"],["wood","wud","n/vt/vi","木材、木制品","cet4","1236"],["truck","trʌk","n/vt/vi","卡车、货车","cet4","1237"],["handle","hændl","n/vt/vi","柄、把手","cet4","1238"],["August","ɒːˈgʌst. ˈɒːgəst","n/a","八月","cet4","1239"],["mountain","ˈmauntin","n","山、山脉","cet4","1240"],["relevant","ˈrelivənt","a","有关联的、有关系的","cet4","1241"],["apparently","əˈpærəntli","ad","表面上、清楚地","cet4","1243"],["tradition","trəˈdiʃən","n","传说、传统","cet4","1243"],["winter","ˈwintə","n/a/vt/vi","冬季、萧条期","cet4","1244"],["speed","spiːd","n/vi/vt","速率、速度","cet4","1245"],["route","ruːt","n/vt","路径、途径","cet4","1246"],["proportion","prəˈpɒːʃən","n/vt","比例、比率","cet4","1247"],["consideration","kən.sidəˈreiʃən","n","考虑、原因","cet4","1248"],["assessment","əˈsesmənt","n","评估、估定","cet4","1249"],["roll","rəul","n/vi/vt","卷、滚动","cet4","1249"],["latter","ˈlætə","a","后者的、较后的","cet4","1251"],["emerge","iˈməːdʒ","vi","浮现、形成","cet4","1252"],["screen","skriːn","n/vt/vi","幕、银幕","cet4","1252"],["regional","ˈriːdʒənəl","a","地方的、地域性的","cet4","1253"],["resident","ˈrezidənt","n/a","居民、常驻程序","cet4","1254"],["hide","haid","n/vt/vi","兽皮、迹象","cet4","1255"],["mark","mɑːk","n/vt/vi","标志、分数","cet4","1255"],["gold","gəuld","n/a","黄金、钱财","cet4","1256"],["separate","ˈsepəreit","n/a/vi/vt","独立件、抽印本","cet4","1256"],["deny","diˈnai","v","否认、拒绝","cet4","1258"],["practical","ˈpræktikl","a","实际的、现实的","cet4","1259"],["potential","pəˈtenʃəl","n/a","潜在性、可能性","cet4","1260"],["understanding","ʌndəˈstændiŋ","n","理解、谅解","cet4","1260"],["aim","eim","n/vi/vt","目标、瞄准","cet4","1261"],["danger","ˈdeindʒə","n","危险、威胁","cet4","1264"],["progress","ˈprəugres","n/vi","进步、发展","cet4","1265"],["path","pɑːθ","n","路径、小路","cet4","1266"],["reaction","riˈækʃən","n","反应、反作用","cet4","1269"],["crowd","kraud","n/vt","群众、一伙人","cet4","1270"],["flower","ˈflauə","n/vi/vt","花、开花植物","cet4","1270"],["Christian","ˈkristʃən","n/a","基督徒、正派人","cet4","1271"],["appoint","əˈpɒint","vt","任命、指定","cet4","1272"],["apartment","əˈpɑːtmənt","n","房间、公寓","cet4","1273"],["merely","ˈmiəli","ad","只","cet4","1273"],["willing","ˈwiliŋ","a","乐意的、自愿的","cet4","1274"],["regular","ˈregjulə","a/n/ad","规则的、常例的","cet4","1276"],["link","liŋk","n/vt/vi","环、连结物","cet4","1277"],["comment","ˈkɒment","n/vi","注解、批评","cet4","1279"],["due","djuː","n/a","应得的东西、应付款","cet4","1280"],["content","kənˈtent","n/a/vt","内容、满足","cet4","1281"],["conclusion","kənˈkluːʒən","n","结论、结尾","cet4","1282"],["prison","ˈprizn","n/vt","监狱、监禁","cet4","1282"],["chief","tʃiːf","n/a","领袖、酋长","cet4","1283"],["ride","raid","n/vt/vi","骑马、乘坐","cet4","1283"],["guard","gɑːd","n/vt/vi","守卫者、警戒","cet4","1284"],["reply","riˈplai","n/vi/vt","答复、回答","cet4","1286"],["reporter","riˈpɒːtə","n","记者、报告者","cet4","1286"],["justice","ˈdʒʌstis","n","正义、公平","cet4","1287"],["deliver","diˈlivə","vt","递送、陈述","cet4","1288"],["observe","əbˈzəːv","vt/vi","觉察到、遵守","cet4","1288"],["belief","biˈliːf","n","信念、相信","cet4","1291"],["tool","tuːl","n/vt/vi","工具、机床","cet4","1291"],["wild","waild","n/a/ad","荒野、荒地","cet4","1292"],["vehicle","ˈviːikl","n","交通工具、车辆","cet4","1293"],["flight","flait","n/vi/vt","飞行、射程","cet4","1295"],["settle","ˈsetl","n/vt/vi","有背长椅","cet4","1295"],["ignore","igˈnɒː","vt","不理睬、忽视","cet4","1296"],["sight","sait","n/vt/vi/a","景观、视力","cet4","1298"],["average","ˈævəridʒ","n/a/vt/vi","平均、平均数","cet4","1299"],["estate","iˈsteit","n","不动产、(人生的)阶段","cet4","1302"],["quick","kwik","a/ad/n","快的、迅速的","cet4","1303"],["leadership","ˈliːdəʃip","n","领导能力、领导阶层","cet4","1304"],["wine","wain","n/v","葡萄酒、果酒","cet4","1304"],["earn","əːn","vt","赚得、获得","cet4","1305"],["ring","riŋ","n/vt/vi","环、环形物","cet4","1305"],["bright","brait","a/ad","明亮的、聪明的","cet4","1308"],["propose","prəˈpəuz","vt/vi","计划、打算","cet4","1309"],["additional","əˈdiʃənəl","a","附加的、另外的","cet4","1310"],["guest","gest","n","客人、来宾","cet4","1310"],["dad","dæd","n","爸爸、爹爹","cet4","1311"],["sample","ˈsæmpl","n/vt","样品、范例","cet4","1311"],["contribute","kənˈtribjuːt","vt/vi","有助于、捐助","cet4","1312"],["possibly","ˈpɒsəbli","ad","可能、也许","cet4","1312"],["tiny","ˈtaini","a","很少的、微小的","cet4","1313"],["block","blɒk","n/vt","街区、木块","cet4","1314"],["clothes","kləuðz","n","衣服","cet4","1315"],["active","ˈæktiv","a/n","活跃的、起作用的","cet4","1316"],["feed","fiːd","n/vt/vi","饲料、一餐","cet4","1317"],["employer","imˈplɒiə","n","雇主、老板","cet4","1318"],["debt","det","n","债务、罪过","cet4","1320"],["identity","aiˈdentiti","n","身份、相同","cet4","1322"],["objective","əbˈdʒektiv","n/a","目的、目标","cet4","1322"],["largely","ˈlɑːdʒli","ad","大量地、很多地","cet4","1323"],["arrange","əˈreindʒ","v","安排、排列","cet4","1324"],["mostly","ˈməustli","ad","大概、大部分","cet4","1324"],["lesson","ˈlesn","n","课、课业","cet4","1325"],["survive","səˈvaiv","vt/vi","比...活得长、生存","cet4","1325"],["faith","feiθ","n","信心、信任","cet4","1326"],["telephone","ˈtelifəun","n/v","电话、电话机","cet4","1327"],["photo","ˈfəutəu","n/v/a","相片、照片","cet4","1328"],["promote","prəuˈməut","vt","促进、晋升","cet4","1328"],["living","ˈliviŋ","n/a","生活、生计","cet4","1329"],["count","kaunt","vt/vi/n","计算、视为","cet4","1331"],["farmer","ˈfɑːmə","n","农夫、农场主","cet4","1333"],["injury","ˈindʒəri","n","伤害、侮辱","cet4","1334"],["package","ˈpækidʒ","n/vt/a","包裹、套装软件","cet4","1336"],["ear","iə","n/vi","耳朵、倾听","cet4","1337"],["nevertheless","nevəðəˈles","ad/conj","然而、虽然如此","cet4","1337"],["colleague","ˈkɒliːg","n","同事、同僚","cet4","1338"],["complex","kəmˈpleks","n/a","综合体、情结","cet4","1339"],["folk","fəuk","n/a","人们、家人","cet4","1339"],["impossible","imˈpɒsəbl","a","不可能的、难以置信的","cet4","1340"],["concentrate","ˈkɒnsəntreit","n/v","浓缩、精选","cet4","1341"],["confidence","ˈkɒnfidəns","n","信心","cet4","1342"],["lift","lift","n/vt/vi","举起、帮助","cet4","1343"],["border","ˈbɒːdə","n/vt/vi","边缘、边境","cet4","1344"],["jump","dʒʌmp","n/vt/vi","跳跃、跳动","cet4","1346"],["gather","ˈgæðə","n/vi/vt","集合、聚集","cet4","1347"],["limit","ˈlimit","n/vt","界限、边界","cet4","1348"],["forty","ˈfɒːti","num","四十、四十个","cet4","1350"],["cry","krai","n/vi/vt","叫声、哭声","cet4","1351"],["cross","krɒs","n/a/v","十字架、十字架形物件","cet4","1352"],["warm","wɒːm","a/vt/vi/n","暖和的、暖的","cet4","1353"],["visitor","ˈvizitə","n","参观者、游客","cet4","1354"],["commitment","kəˈmitmənt","n","委托、交押","cet4","1355"],["critic","ˈkritik","n","批评家、鉴定家","cet4","1355"],["plus","plʌs","prep/a/n","加上、加","cet4","1357"],["volume","ˈvɒljum","n/vi/vt/a","册、卷","cet4","1358"],["insist","inˈsist","v","坚持、坚决主张","cet4","1359"],["somewhere","ˈsʌmhwєə","ad","到某处、在某处","cet4","1359"],["currently","ˈkʌrəntli","ad","现在、当前","cet4","1361"],["legislation","ledʒisˈleiʃən","n","立法、法律","cet4","1365"],["manner","ˈmænə","n","样子、礼貌","cet4","1366"],["background","ˈbækgraund","n","背景、背景资料","cet4","1369"],["spread","spred","n/a/vt/vi","传播、散布","cet4","1371"],["baseball","ˈbeisbɒːl","n","棒球","cet4","1373"],["entry","ˈentri","n","登录、条目","cet4","1373"],["engine","ˈendʒin","n/vt","引擎、发动机","cet4","1374"],["soft","sɒft","a/n/ad","软的、温和的","cet4","1374"],["egg","eg","n/vt","蛋、卵","cet4","1376"],["cabinet","ˈkæbinit","n/a","橱柜、内阁","cet4","1378"],["demonstrate","ˈdemənstreit","vt/vi","示范、证明","cet4","1379"],["introduction","intrəˈdʌkʃən","n","介绍、传入","cet4","1379"],["anybody","ˈenibɒdi","pron/n","任何人","cet4","1380"],["domestic","dəuˈmestik","a","家庭的、国内的","cet4","1381"],["murder","ˈməːdə","n/vt/vi","谋杀","cet4","1381"],["gift","gift","n/vt","礼物、赠予","cet4","1382"],["religion","riˈlidʒən","n","宗教、信仰","cet4","1383"],["editor","ˈeditə","n","编者、编辑","cet4","1385"],["prefer","priˈfəː","vt","宁可、较喜欢","cet4","1386"],["engage","inˈgeidʒ","vi/vt","答应、从事","cet4","1387"],["ordinary","ˈɒːdinəri","a/n","平常的、普通的","cet4","1387"],["coffee","ˈkɒfi","n","咖啡、咖啡色","cet4","1388"],["cheap","tʃiːp","a/ad","便宜的、不值钱的","cet4","1389"],["threaten","ˈθretn","vt/vi","恐吓、威胁","cet4","1390"],["relief","riˈliːf","n","减轻、解除","cet4","1391"],["commit","kəˈmit","vt","委托(托付)、犯罪","cet4","1393"],["technical","ˈteknikl","a","技术上的、专门的","cet4","1394"],["grant","grænt","n/vt","授予、授予物","cet4","1395"],["actual","ˈæktʃuəl","a","真实的、实际的","cet4","1396"],["female","ˈfiːmeil","n/a","女性、女人","cet4","1396"],["strange","streindʒ","a","奇怪的、陌生的","cet4","1397"],["youth","juːθ","n","年轻、青年时代","cet4","1397"],["repeat","riˈpiːt","n/vt/vi","重复、反复","cet4","1398"],["wave","weiv","n/vi/vt","波、波浪","cet4","1398"],["bus","bʌs","n","公共汽车","cet4","1399"],["afraid","əˈfreid","a","害怕的、恐怕的","cet4","1400"],["regulation","regjuˈleiʃən","n","规则、管理","cet4","1400"],["native","ˈneitiv","n/a","本地人、土产","cet4","1403"],["broad","brɒːd","a/ad/n","宽广的、辽阔的","cet4","1404"],["wage","weidʒ","n/vt/vi","工资、报应","cet4","1404"],["wonderful","ˈwʌndəful","a","令人惊奇的、奇妙的","cet4","1405"],["row","rəu. rau","n/vt/vi","排、行","cet4","1406"],["acquire","əˈkwaiə","vt","获得、学到","cet4","1407"],["twice","twais","ad","两次、两倍","cet4","1410"],["suit","sjuːt. suːt","n/vt/vi","套装、诉讼","cet4","1411"],["perspective","pəˈspektiv","n/a","远景、透视感","cet4","1412"],["fairly","ˈfєəli","ad","美观地、公平地","cet4","1413"],["blow","bləu","n/v","吹、打击","cet4","1414"],["construction","kənˈstrʌkʃən","n","建筑、构造","cet4","1415"],["meal","miːl","n/vi","一餐、膳食","cet4","1415"],["excellent","ˈekslənt","a","优良的、杰出的","cet4","1416"],["intelligence","inˈtelidʒəns","n","智力、情报","cet4","1417"],["destroy","diˈstrɒi","vt","破坏、毁坏","cet4","1418"],["internal","inˈtəːnəl","a","内在的、国内的","cet4","1418"],["category","ˈkætigəri","n","种类、类项","cet4","1419"],["cook","kuk","n/vt/vi","厨子、厨师","cet4","1419"],["tour","tuə","n/vi/vt","旅游、观光旅行","cet4","1420"],["connection","kəˈnekʃən","n","连接、关系","cet4","1421"],["burn","bəːn","vt/vi/n","烧、烧毁","cet4","1422"],["shoe","ʃuː","n/vt","鞋、靴","cet4","1423"],["traffic","ˈtræfik","n/vi/vt","交通、通行","cet4","1423"],["football","ˈfutbɒːl","n","足球、橄榄球","cet4","1424"],["neighbor","ˈneibə","n/vt/vi/a","邻居","cet4","1424"],["exhibition","eksiˈbiʃən","n","表现、展览会","cet4","1426"],["grade","greid","n/vt/vi","等级、年级","cet4","1426"],["launch","lɒːntʃ","n/vt/vi","下水、汽艇","cet4","1427"],["mistake","misˈteik","n/vi/vt","错误、误会","cet4","1430"],["sheet","ʃiːt","n/vt/vi/a","床单、张","cet4","1430"],["equally","ˈiːkwəli","ad","相等地、同样地","cet4","1432"],["location","ləuˈkeiʃən","n","位置、场所","cet4","1433"],["bridge","bridʒ","n/vt","桥、舰桥","cet4","1434"],["appearance","əˈpiərəns","n","出现、露面","cet4","1435"],["quiet","ˈkwaiət","n/a/vi/vt","安静、闲适","cet4","1435"],["dress","dres","n/vi/vt","服装、覆盖物","cet4","1437"],["promise","ˈprɒmis","n/vt/vi","诺言、约定的事情","cet4","1438"],["improvement","imˈpruːvmənt","n","进步、改善","cet4","1440"],["description","diˈskripʃən","n","描述、说明","cet4","1441"],["bone","bəun","n/vt/vi","骨头、骨","cet4","1443"],["session","ˈseʃən","n","期间、开庭期","cet4","1443"],["northern","ˈnɒːðən","n/a","北方人","cet4","1445"],["housing","ˈhausiŋ","n","遮盖、住房供给","cet4","1446"],["twelve","twelv","num","十二、十二个","cet4","1447"],["combine","kəmˈbain","v/n","(使)联合、(使)结合","cet4","1448"],["flat","flæt","a/ad/n/v","平坦的、单调的","cet4","1448"],["discipline","ˈdisiplin","n/vt","训练、纪律","cet4","1450"],["contrast","kənˈtræst","n/vt/vi","差别、对比","cet4","1451"],["cool","kuːl","n/a/vi/vt","凉爽、凉爽的空气","cet4","1451"],["lip","lip","n/vt/a","唇、口缘","cet4","1452"],["voter","ˈvəutə","n","选民、投票人","cet4","1452"],["increasingly","inˈkriːsiŋli","ad","逐渐地、渐增地","cet4","1453"],["existence","igˈzistəns","n","存在、生存","cet4","1454"],["gentleman","ˈdʒentlmən","n","绅士、先生","cet4","1455"],["learning","ˈləːniŋ","n","学问、学识","cet4","1455"],["distribution","distrəˈbjuːʃən","n","分配","cet4","1456"],["hell","hel","n/vi","地狱、邪恶势力","cet4","1456"],["dangerous","ˈdeindʒərəs","a","危险的","cet4","1457"],["proper","ˈprɒpə","a/ad","适当的、固有的","cet4","1458"],["remind","riˈmaind","vt","提醒、使想起","cet4","1458"],["moral","ˈmɒrəl","n/a","道德、品行","cet4","1459"],["retain","riˈtein","vt","保持、保有","cet4","1460"],["famous","ˈfeiməs","a","出名的、极好的","cet4","1461"],["victory","ˈviktəri","n","胜利、战胜","cet4","1463"],["academic","ækəˈdemik","a/n","学院的、学术的","cet4","1465"],["prince","prins","n","王子、亲王","cet4","1466"],["Internet","ˈintənet","n.","互联网","cet4","1467"],["healthy","ˈhelθi","a","健康的、有益健康的","cet4","1468"],["loan","ləun","n/v","贷款、借出","cet4","1468"],["code","kəud","n/vt","代码、密码","cet4","1469"],["negative","ˈnegətiv","n/a","否定、否定语","cet4","1470"],["representative","repriˈzentətiv","n/a","代表、众议员","cet4","1470"],["historical","hiˈstɒrikəl","a","历史的、史实的","cet4","1472"],["medicine","ˈmedisin","n/vt","药、医学","cet4","1473"],["usual","ˈjuːʒuəl","a","平常的、通常的","cet4","1473"],["belong","biˈlɒŋ","vi","属于、合适","cet4","1475"],["finding","ˈfaindiŋ","n","发现、发现物","cet4","1476"],["respect","riˈspekt","n/vt","尊敬、尊重","cet4","1476"],["attract","əˈtrækt","vt/vi","吸引、诱惑","cet4","1477"],["grab","græb","n/vi/vt","抓握、掠夺","cet4","1477"],["classroom","ˈklɑːsruːm","n","教室","cet4","1479"],["limited","ˈlimitid","a/n","有限制的、有限的","cet4","1481"],["photograph","ˈfəutəgrɑːf","n/v","相片、照片","cet4","1481"],["formal","ˈfɒːməl","a/n","正式的、形式的","cet4","1482"],["participate","pɑːˈtisipeit","vi/vt","参加、分享","cet4","1482"],["daily","ˈdeili","a/ad/n","每日的、日常的","cet4","1483"],["writing","ˈraitiŋ","n","书写、著作","cet4","1484"]];
+
+</script>
+<script>
+/* =========================================================================
+   点图 · 标注记忆 · 融合原型 v0.4
+   点空位 → 中央标注卡刷新待标注词 → 切分 → 保存 → 点亮该点
+   点已点亮的点 → 读数条显示标签；可改词 / 熄灭
+   每箱词数：100 / 200 / 300 / 400（100 阶梯，400 封顶；地图固定 400 点）
+   封箱（达到目标词数为主操作，也可提前封）→ 箱库 → 选一箱训练
+   手机：点图画布可上下滑动，卡片固定在中间；点不再缩小挤在一起
+   ========================================================================= */
+(function () {
+  'use strict';
+
+  var POOL = (window.WORD_POOL || []).slice();
+  var CAP_STEPS = [100, 200, 300, 400];
+  var DEFAULT_CAPACITY = 100;
+  var MAP_POINTS = 400;
+  var TOTAL_WORDS = 7838;
+  var BASE_ANNOTATED = 1123;          // 对齐草图里的起始进度（演示值）
+  var STORE_KEY = 'pointfield.proto.v3';
+
+  var POS_LABEL = { n: '名词', v: '动词', adj: '形容词', adv: '副词', prep: '介词', conj: '连词', pron: '代词', num: '数词', art: '冠词', int: '感叹词', other: '其他' };
+  var POS_MAP = { n: 'n', v: 'v', vt: 'v', vi: 'v', aux: 'v', a: 'adj', adj: 'adj', ad: 'adv', adv: 'adv', prep: 'prep', conj: 'conj', pron: 'pron', num: 'num', art: 'art', int: 'int' };
+
+  /* ---------------------------------------------------------------- utils */
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function posLabel(pos) {
+    if (!pos) return '其他';
+    var first = String(pos).split('/')[0].trim().toLowerCase();
+    return POS_LABEL[POS_MAP[first] || 'other'] || '其他';
+  }
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffle(arr, rnd) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor((rnd || Math.random)() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function piecesFromCuts(word, cuts) {
+    var s = String(word || '');
+    var list = (cuts || []).slice().sort(function (a, b) { return a - b; });
+    var out = [], prev = 0;
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (typeof c !== 'number' || c <= prev || c >= s.length) continue;
+      out.push(s.slice(prev, c));
+      prev = c;
+    }
+    out.push(s.slice(prev));
+    return out;
+  }
+  function cutsFromPieces(word, pieces) {
+    var cuts = [], pos = 0;
+    for (var i = 0; i < pieces.length - 1; i++) { pos += String(pieces[i]).length; cuts.push(pos); }
+    return cuts;
+  }
+  function findWord(w) {
+    for (var i = 0; i < POOL.length; i++) if (POOL[i][0] === w) return POOL[i];
+    return null;
+  }
+  function poolIndex(w) {
+    for (var i = 0; i < POOL.length; i++) if (POOL[i][0] === w) return i;
+    return -1;
+  }
+  function fmtDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /* ---------------------------------------------------------------- state */
+  function freshState() {
+    return { v: 3, boxNo: 1, capacity: DEFAULT_CAPACITY, pointer: 0, entries: [], sealed: [], template: null };
+  }
+  function sanitize(raw) {
+    var out = freshState();
+    if (!raw || raw.v !== 3) return out;
+    out.boxNo = Number.isInteger(raw.boxNo) && raw.boxNo > 0 ? raw.boxNo : 1;
+    out.capacity = CAP_STEPS.indexOf(raw.capacity) >= 0 ? raw.capacity : DEFAULT_CAPACITY;
+    out.pointer = Number.isInteger(raw.pointer) ? Math.max(0, Math.min(raw.pointer, POOL.length)) : 0;
+    var seen = {};
+    if (Array.isArray(raw.entries)) {
+      for (var i = 0; i < raw.entries.length; i++) {
+        var e = raw.entries[i];
+        if (!e || !Number.isInteger(e.p) || e.p < 0 || e.p >= MAP_POINTS || seen[e.p] || typeof e.w !== 'string' || !e.w) continue;
+        var pieces = Array.isArray(e.pieces) && e.pieces.join('') === e.w ? e.pieces.map(String) : [e.w];
+        seen[e.p] = true;
+        out.entries.push({ p: e.p, w: e.w, pieces: pieces, t: e.t || Date.now() });
+      }
+    }
+    if (Array.isArray(raw.sealed)) {
+      raw.sealed.forEach(function (box) {
+        if (!box || !Array.isArray(box.entries)) return;
+        var entries = box.entries.filter(function (e) {
+          return e && Number.isInteger(e.p) && typeof e.w === 'string' && e.w;
+        }).map(function (e) {
+          return {
+            p: e.p, w: e.w,
+            pieces: Array.isArray(e.pieces) && e.pieces.join('') === e.w ? e.pieces.map(String) : [e.w],
+            t: e.t || box.sealedAt || Date.now(),
+          };
+        });
+        out.sealed.push({
+          boxNo: box.boxNo || 0,
+          capacity: CAP_STEPS.indexOf(box.capacity) >= 0 ? box.capacity : DEFAULT_CAPACITY,
+          entries: entries,
+          sealedAt: box.sealedAt || new Date().toISOString(),
+        });
+      });
+    }
+    var tpl = raw.template;
+    if (tpl && (tpl.mode === 'fit' || tpl.mode === 'scroll') && Number.isFinite(tpl.plateH) && Array.isArray(tpl.points)) {
+      var pts = tpl.points.filter(function (pt) {
+        return Array.isArray(pt) && pt.length === 2 && typeof pt[0] === 'number' && typeof pt[1] === 'number';
+      });
+      if (pts.length === MAP_POINTS) {
+        out.template = { mode: tpl.mode, plateH: tpl.plateH, points: pts };
+      }
+    }
+    return out;
+  }
+  function loadState() {
+    try {
+      if (/[?&]fresh=1/.test(location.search)) {
+        try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+        return freshState();
+      }
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) return sanitize(JSON.parse(raw));
+    } catch (e) { /* private mode */ }
+    return freshState();
+  }
+  function saveState() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { toast('本地存储不可用，进度可能丢失'); }
+  }
+
+  var state = loadState();
+  var ui = {
+    selected: null, current: null, currentIndex: -1, cuts: [],
+    hover: null, pinned: null, anim: null, flash: null,
+    replace: null, splitEdit: null, viewSealed: null,
+    drawer: null, train: null, capOpen: false, menuOpen: false,
+    pendingImport: null, installPrompt: null,
+    toastTimer: null, flashTimer: null
+  };
+
+  /* ---------------------------------------------------------------- dom */
+  var stageEl = $('stage'), mapScroll = $('mapScroll'), mapEl = $('map'), cardEl = $('card');
+  var wordRow = $('wordRow'), wordMeta = $('wordMeta'), piecePreview = $('piecePreview');
+  var cardHint = $('cardHint'), cardLevel = $('cardLevel');
+  var skipBtn = $('skipBtn'), clearBtn = $('clearBtn'), saveBtn = $('saveBtn');
+  var dockEl = $('dock'), toastEl = $('toast');
+  var annotFill = $('annotFill'), annotCount = $('annotCount'), boxPill = $('boxPill');
+  var annotatedBtn = $('annotatedBtn'), boxesBtn = $('boxesBtn'), boxesBadge = $('boxesBadge');
+  var viewbar = $('viewbar'), viewbarText = $('viewbarText'), backToCurrent = $('backToCurrent');
+  var scrim = $('scrim'), drawerEl = $('drawer'), drawerTitle = $('drawerTitle');
+  var drawerMeta = $('drawerMeta'), drawerBody = $('drawerBody'), drawerClose = $('drawerClose');
+  var capPopover = $('capPopover'), capOptions = $('capOptions');
+  var menuBtn = $('menuBtn'), menuPopover = $('menuPopover');
+  var exportBtn = $('exportBtn'), importBtn = $('importBtn'), installBtn = $('installBtn');
+  var importFile = $('importFile');
+  var importModal = $('importModal'), importSummary = $('importSummary');
+  var importCancel = $('importCancel'), importMergeBtn = $('importMerge'), importReplaceBtn = $('importReplace');
+  var trainView = $('trainView');
+  var stageW = 1, stageH = 1;
+
+  /* ---------------------------------------------------------------- derived */
+  function entryAt(p) {
+    for (var i = 0; i < state.entries.length; i++) if (state.entries[i].p === p) return state.entries[i];
+    return null;
+  }
+  function isPlaced(w) {
+    if (state.entries.some(function (e) { return e.w === w; })) return true;
+    return state.sealed.some(function (b) {
+      return b.entries.some(function (e) { return e.w === w; });
+    });
+  }
+  function isFull() { return state.entries.length >= state.capacity; }
+  function annotatedTotal() {
+    var n = BASE_ANNOTATED + state.entries.length;
+    state.sealed.forEach(function (b) { n += b.entries.length; });
+    return n;
+  }
+  function currentViewEntries() {
+    if (ui.viewSealed != null) {
+      var box = state.sealed.filter(function (b) { return b.boxNo === ui.viewSealed; })[0];
+      return box ? box.entries : [];
+    }
+    return state.entries;
+  }
+  function isMobileLayout() { return stageEl.clientWidth <= 760; }
+
+  /* ---------------------------------------------------------------- template */
+  function generateTemplate() {
+    var W = Math.max(200, Math.round(stageEl.clientWidth || 900));
+    var H = Math.max(200, Math.round(stageEl.clientHeight || 600));
+    var mode = isMobileLayout() ? 'scroll' : 'fit';
+    var plateH = mode === 'scroll' ? Math.max(H, Math.round(W * 3.2)) : H;
+    var safe = null;
+    if (mode === 'fit') {
+      var cardW = Math.min(460, W * 0.86);
+      var cardH = Math.min(330, H * 0.62);
+      var cx = W / 2, cy = H / 2;
+      safe = {
+        x0: cx - cardW / 2 - 18, x1: cx + cardW / 2 + 18,
+        y0: cy - cardH / 2 - 18, y1: cy + cardH / 2 + 18,
+      };
+    }
+    var usable = mode === 'fit'
+      ? Math.max(1, (W - 44) * (plateH - 40) - Math.max(0, safe.x1 - safe.x0) * Math.max(0, safe.y1 - safe.y0))
+      : Math.max(1, (W - 44) * (plateH - 40));
+    var target = MAP_POINTS;
+    var rnd = mulberry32(mode === 'scroll' ? 20261114 : 20261113);
+    var pts = [];
+    var minD = Math.max(9, Math.min(40, Math.sqrt(usable / target) * 0.66));
+    for (var relax = 0; relax < 8 && pts.length < target; relax++) {
+      pts = [];
+      var cell = minD, grid = {}, attempts = 0, maxAttempts = target * 600;
+      while (pts.length < target && attempts < maxAttempts) {
+        attempts++;
+        var x = 22 + rnd() * (W - 44);
+        var y = 20 + rnd() * (plateH - 40);
+        if (safe && x > safe.x0 && x < safe.x1 && y > safe.y0 && y < safe.y1) continue;
+        var gx = Math.floor(x / cell), gy = Math.floor(y / cell), ok = true;
+        for (var dx = -1; dx <= 1 && ok; dx++) {
+          for (var dy = -1; dy <= 1 && ok; dy++) {
+            var bucket = grid[(gx + dx) + ',' + (gy + dy)];
+            if (!bucket) continue;
+            for (var k = 0; k < bucket.length; k++) {
+              var ox = bucket[k][0] - x, oy = bucket[k][1] - y;
+              if (ox * ox + oy * oy < minD * minD) { ok = false; break; }
+            }
+          }
+        }
+        if (!ok) continue;
+        pts.push([x, y]);
+        var key = gx + ',' + gy;
+        (grid[key] || (grid[key] = [])).push([x, y]);
+      }
+      minD *= 0.9;
+    }
+    var guard = 0;
+    while (pts.length < target && guard < target * 200) {
+      guard++;
+      var bx = 22 + rnd() * (W - 44), by = 20 + rnd() * (plateH - 40);
+      if (safe && bx > safe.x0 && bx < safe.x1 && by > safe.y0 && by < safe.y1) continue;
+      pts.push([bx, by]);
+    }
+    return {
+      mode: mode,
+      plateH: plateH,
+      points: pts.map(function (pt) {
+        return [+(pt[0] / W).toFixed(4), +(pt[1] / plateH).toFixed(4)];
+      }),
+    };
+  }
+  function ensureTemplate() {
+    var mode = isMobileLayout() ? 'scroll' : 'fit';
+    if (!state.template || state.template.mode !== mode) {
+      state.template = generateTemplate();
+      saveState();
+    }
+  }
+
+  /* ---------------------------------------------------------------- map */
+  function layoutMap() {
+    var rect = stageEl.getBoundingClientRect();
+    stageW = Math.max(1, Math.round(rect.width));
+    stageH = Math.max(1, Math.round(rect.height));
+    var tpl = state.template;
+    var scrollMode = tpl.mode === 'scroll';
+    var W = stageW;
+    var H = scrollMode ? tpl.plateH : stageH;
+
+    if (scrollMode) {
+      mapScroll.classList.add('scrollable');
+      mapEl.style.width = '100%';
+      mapEl.style.height = H + 'px';
+    } else {
+      mapScroll.classList.remove('scrollable');
+      mapScroll.scrollTop = 0;
+      mapEl.style.width = '100%';
+      mapEl.style.height = '100%';
+    }
+    mapEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+    var rnd = mulberry32(20261113);
+    var decor = '';
+    var decorN = Math.round(W * H / 4200);
+    for (var i = 0; i < decorN; i++) {
+      var dx = 34 + rnd() * (W - 68), dy = 34 + rnd() * (H - 68);
+      var dr = 0.3 + rnd() * 1.1, op = 0.025 + rnd() * 0.07;
+      decor += '<circle cx="' + dx.toFixed(1) + '" cy="' + dy.toFixed(1) + '" r="' + dr.toFixed(2) +
+        '" opacity="' + op.toFixed(3) + '" fill="#aebbd4"/>';
+    }
+    var frame =
+      '<rect class="frame-outer" x="10.5" y="10.5" width="' + Math.max(0, W - 21) + '" height="' + Math.max(0, H - 21) + '" rx="14"/>' +
+      '<rect class="frame-inner" x="24.5" y="24.5" width="' + Math.max(0, W - 49) + '" height="' + Math.max(0, H - 49) + '" rx="9"/>' +
+      '<circle class="corner" cx="24" cy="24" r="1.6"/><circle class="corner" cx="' + (W - 24) + '" cy="24" r="1.6"/>' +
+      '<circle class="corner" cx="24" cy="' + (H - 24) + '" r="1.6"/><circle class="corner" cx="' + (W - 24) + '" cy="' + (H - 24) + '" r="1.6"/>';
+
+    var entries = currentViewEntries();
+    var lit = {};
+    entries.forEach(function (e) { lit[e.p] = e; });
+    var hitR = scrollMode ? 14 : Math.max(8, Math.min(20, Math.sqrt(W * H / MAP_POINTS) * 0.5));
+    var pts = '';
+    for (var k = 0; k < tpl.points.length; k++) {
+      var pt = tpl.points[k];
+      var x = pt[0] * W, y = pt[1] * H;
+      var entry = lit[k];
+      var cls = 'pt ' + (entry ? 'lit' : 'empty');
+      if (ui.selected === k) cls += ' target';
+      if (ui.pinned === k) cls += ' pin';
+      if (ui.anim === k) cls += ' anim';
+      var inner = entry
+        ? '<circle class="glow" r="11"/><circle class="core" r="3.2"/><circle class="spark" r="1.1"/>'
+        : '<circle class="ring" r="3.1"/>';
+      var halo = ui.selected === k ? '<circle class="halo-select" r="10"/>' : '';
+      var pinRing = (entry && ui.pinned === k) ? '<circle class="pin-ring" r="8"/>' : '';
+      pts += '<g class="' + cls + '" data-i="' + k + '" transform="translate(' + x.toFixed(2) + ' ' + y.toFixed(2) + ')">' +
+        '<circle class="hit" r="' + hitR.toFixed(1) + '"/>' + inner + pinRing + halo + '</g>';
+    }
+    mapEl.innerHTML = '<defs><radialGradient id="litGlow" cx="50%" cy="50%" r="50%">' +
+      '<stop offset="0%" stop-color="#f6dc9e" stop-opacity=".62"/>' +
+      '<stop offset="38%" stop-color="#e9c37a" stop-opacity=".24"/>' +
+      '<stop offset="100%" stop-color="#e9c37a" stop-opacity="0"/>' +
+      '</radialGradient></defs>' +
+      '<g class="decor">' + decor + '</g>' +
+      '<g class="frame" pointer-events="none">' + frame + '</g>' +
+      '<g class="points">' + pts + '</g>';
+  }
+
+  /* 手机滑动模式下：让选中的点滚出卡片遮挡区，出现在卡片上方 */
+  function ensureSelectedVisible() {
+    if (!state.template || state.template.mode !== 'scroll' || ui.selected == null) return;
+    var stageRect = stageEl.getBoundingClientRect();
+    var cardRect = cardEl.getBoundingClientRect();
+    var cardTop = cardRect.top - stageRect.top;
+    var py = state.template.points[ui.selected][1] * state.template.plateH;
+    var screenY = py - mapScroll.scrollTop;
+    if (screenY > cardTop - 26 && screenY < (cardRect.bottom - stageRect.top) + 26) {
+      var target = py - (cardTop - 32);
+      var max = Math.max(0, mapScroll.scrollHeight - mapScroll.clientHeight);
+      mapScroll.scrollTop = Math.max(0, Math.min(target, max));
+    }
+  }
+  function scheduleEnsureVisible() {
+    if (state.template && state.template.mode === 'scroll') {
+      requestAnimationFrame(function () { ensureSelectedVisible(); });
+    }
+  }
+
+  /* ---------------------------------------------------------------- card */
+  function idleHint() {
+    if (ui.viewSealed != null) return '回看第 ' + ui.viewSealed + ' 箱（只读）';
+    if (isFull()) return '<b>本箱已满</b>（' + state.capacity + ' 词）· 按底部「封箱」';
+    if (state.pointer >= POOL.length) return '<b>词池已空</b> · 点「已标注词汇」查看已写入的词';
+    if (state.entries.length === 0) return '在图中点一个空位';
+    return '继续<b>点空位</b>，为下一个词选位置';
+  }
+  function idleSubhint() {
+    if (ui.viewSealed != null) return '封存的箱只读 · 点已点亮的点读标签';
+    if (isFull()) return '满 ' + state.capacity + ' 词 · 封箱后新箱复用同一张图';
+    return '选点后这里会刷新一个待标注的词 · 标注完成即点亮该点';
+  }
+  function fitFont(len) {
+    var cardW = Math.min(460, stageEl.clientWidth * 0.86);
+    var avail = cardW - 44;
+    var gap = 10;
+    var size = Math.floor((avail - Math.max(0, len - 1) * gap) / Math.max(1, len * 0.62));
+    return Math.max(14, Math.min(42, size));
+  }
+  function wordRowHtml(word, cuts) {
+    var w = word[0], html = '';
+    for (var i = 0; i < w.length; i++) {
+      var ch = w.charAt(i);
+      html += ch === ' ' ? '<span class="ch space">&#9251;</span>' : '<span class="ch">' + esc(ch) + '</span>';
+      if (i < w.length - 1) {
+        var pos = i + 1;
+        html += '<button type="button" class="cut' + (cuts.indexOf(pos) >= 0 ? ' on' : '') + '" data-c="' + pos +
+          '" title="在第 ' + pos + ' 个字母后切分" aria-label="在第 ' + pos + ' 个字母后切分"></button>';
+      }
+    }
+    return html;
+  }
+  function renderCard() {
+    var sealedView = ui.viewSealed != null;
+    cardEl.hidden = sealedView || !!ui.train;
+    if (cardEl.hidden) return;
+    var word = ui.current;
+    if (!word) {
+      cardEl.dataset.state = 'idle';
+      wordRow.style.fontSize = '';
+      wordRow.innerHTML = '<span class="idle-hint">' + idleHint() + '</span>';
+      wordMeta.hidden = true; wordMeta.textContent = '';
+      piecePreview.hidden = true; piecePreview.innerHTML = '';
+      cardHint.textContent = idleSubhint();
+      cardLevel.textContent = '';
+      setBtn(skipBtn, false); setBtn(clearBtn, false); setBtn(saveBtn, false);
+      saveBtn.textContent = '保存并点亮';
+      return;
+    }
+    cardEl.dataset.state = 'annotating';
+    wordMeta.hidden = false; piecePreview.hidden = false;
+    cardLevel.textContent = word[4] === 'cet6' ? 'CET6 新增' : 'CET4';
+    wordRow.style.fontSize = fitFont(word[0].length) + 'px';
+    wordRow.innerHTML = wordRowHtml(word, ui.cuts);
+    wordMeta.textContent = (word[1] ? '/' + word[1] + '/ · ' : '') + posLabel(word[2]) + ' · ' + word[3];
+    var pieces = piecesFromCuts(word[0], ui.cuts);
+    piecePreview.innerHTML = pieces.map(function (p) {
+      return '<span class="piece">' + esc(p) + '</span>';
+    }).join('<span class="pipe">/</span>') + '<span class="pcount">' + pieces.length + ' 份</span>';
+    if (ui.splitEdit) {
+      cardHint.textContent = '编辑切分 · 保存后更新这条标注';
+      saveBtn.textContent = '保存切分';
+    } else if (ui.replace) {
+      cardHint.textContent = '改词：保存后「' + ui.replace.old.w + '」回到词池，新词写入这个点';
+      saveBtn.textContent = '保存并替换';
+    } else {
+      cardHint.textContent = '点字母之间的空隙下刀 · 最多切 2 刀（3 份） · Enter 保存点亮 · S 跳过';
+      saveBtn.textContent = '保存并点亮';
+    }
+    setBtn(skipBtn, !ui.splitEdit && !ui.replace);
+    setBtn(clearBtn, true);
+    setBtn(saveBtn, true);
+  }
+  function setBtn(el, on) { el.disabled = !on; }
+
+  /* ---------------------------------------------------------------- dock */
+  function renderDock() {
+    var sealedView = ui.viewSealed != null;
+    var viewEntries = currentViewEntries();
+    var full = isFull();
+    var primary = '', secondary = '', tone = '', actions = [];
+
+    if (ui.train) { dockEl.innerHTML = ''; return; }
+
+    if (ui.flash) {
+      primary = ui.flash.primary; secondary = ui.flash.secondary; tone = 'tone-word tone-flash';
+    } else if (ui.pinned != null) {
+      var pe = null, peOrder = 0;
+      for (var i = 0; i < viewEntries.length; i++) {
+        if (viewEntries[i].p === ui.pinned) { pe = viewEntries[i]; peOrder = i + 1; break; }
+      }
+      if (pe) {
+        primary = pe.w;
+        secondary = '第 ' + peOrder + ' 个点亮 · ' +
+          (sealedView ? '第 ' + ui.viewSealed + ' 箱（只读）' : '第 ' + state.boxNo + ' 箱') +
+          ' · ' + pe.pieces.join(' / ') + '（' + pe.pieces.length + ' 份）';
+        tone = 'tone-word';
+        if (!sealedView) {
+          actions = [{ key: 'replace', label: '改词' }, { key: 'extinguish', label: '熄灭', danger: true }];
+        }
+      } else {
+        ui.pinned = null;
+      }
+    } else if (ui.selected != null && ui.current) {
+      primary = ui.replace ? '改词中' : (ui.splitEdit ? '编辑切分中' : '空位已选中');
+      secondary = ui.replace
+        ? '「' + ui.replace.old.w + '」→「' + ui.current[0] + '」· 保存后替换'
+        : (ui.splitEdit ? '正在调整「' + ui.current[0] + '」的切分' : '正在标注「' + ui.current[0] + '」· 保存后点亮这个点');
+    } else if (ui.hover != null) {
+      var he = null;
+      for (var j = 0; j < viewEntries.length; j++) if (viewEntries[j].p === ui.hover) he = viewEntries[j];
+      if (he) { primary = he.w; secondary = '点击固定读数'; tone = 'tone-word'; }
+      else { primary = '空位 · 未写入'; secondary = '点击它，为下一个待标注词选一个位置'; }
+    } else if (sealedView) {
+      primary = '第 ' + ui.viewSealed + ' 箱 · 已封存';
+      secondary = viewEntries.length + ' 词 · 只读回看 · 点已点亮的点读标签';
+    } else if (full) {
+      primary = '本箱已满';
+      secondary = '满 ' + state.capacity + ' 词 · 封箱后新箱复用同一张图';
+      actions = [{ key: 'seal', label: '封箱', kind: 'primary' }];
+    } else if (state.entries.length === 0) {
+      primary = '点空位 → 标注 → 点亮';
+      secondary = '第 ' + state.boxNo + ' 箱 · 目标 ' + state.capacity + ' 词 · 点位固定';
+    } else {
+      primary = '继续点空位，或点已点亮的星读词';
+      secondary = '第 ' + state.boxNo + ' 箱 · 已点亮 ' + state.entries.length + ' / ' + state.capacity;
+    }
+    if (!sealedView && !ui.train && !ui.pinned && !ui.current && state.entries.length > 0 && !full) {
+      actions = [{ key: 'seal', label: '封箱' }];
+    }
+    var actionsHtml = actions.map(function (a) {
+      return '<button class="btn-mini ' + (a.kind || '') + (a.danger ? ' danger' : '') + '" data-action="' + a.key + '">' + esc(a.label) + '</button>';
+    }).join('');
+    dockEl.innerHTML =
+      '<div class="dock-inner">' +
+        '<div class="dock-text">' +
+          '<div class="dock-primary ' + tone + '">' + esc(primary) + '</div>' +
+          '<div class="dock-secondary">' + esc(secondary) + '</div>' +
+        '</div>' +
+        (actionsHtml ? '<div class="dock-actions">' + actionsHtml + '</div>' : '') +
+      '</div>';
+  }
+
+  /* ---------------------------------------------------------------- header / popover */
+  function renderHeader() {
+    var n = annotatedTotal();
+    annotCount.textContent = '已标注 ' + n + ' / ' + TOTAL_WORDS;
+    annotFill.style.width = (n / TOTAL_WORDS * 100).toFixed(2) + '%';
+    var boxText = ui.viewSealed != null
+      ? '回看第 ' + ui.viewSealed + ' 箱'
+      : (isMobileLayout()
+        ? state.entries.length + ' / ' + state.capacity + ' ▾'
+        : '第 ' + state.boxNo + ' 箱 · ' + state.entries.length + ' / ' + state.capacity + ' ▾');
+    boxPill.textContent = boxText;
+    boxPill.title = '第 ' + state.boxNo + ' 箱 · 每箱词数 ' + state.capacity + '（点此调整 100/200/300/400）';
+    boxesBadge.textContent = String(state.sealed.length);
+    boxesBadge.hidden = state.sealed.length === 0;
+    viewbar.hidden = ui.viewSealed == null;
+    if (ui.viewSealed != null) {
+      var box = state.sealed.filter(function (b) { return b.boxNo === ui.viewSealed; })[0];
+      viewbarText.textContent = '回看第 ' + ui.viewSealed + ' 箱 · ' + (box ? box.entries.length : 0) + ' 词 · 只读';
+    }
+  }
+
+  function renderCapOptions() {
+    capOptions.innerHTML = CAP_STEPS.map(function (n) {
+      return '<button class="cap-opt' + (n === state.capacity ? ' active' : '') + '" data-cap="' + n + '">' + n + '</button>';
+    }).join('');
+  }
+  function openCapPopover() {
+    if (ui.viewSealed != null) return;
+    renderCapOptions();
+    capPopover.hidden = false;
+    var rect = boxPill.getBoundingClientRect();
+    capPopover.style.top = Math.round(rect.bottom + 8) + 'px';
+    capPopover.style.right = Math.round(Math.max(12, window.innerWidth - rect.right)) + 'px';
+    ui.capOpen = true;
+  }
+  function closeCapPopover() {
+    capPopover.hidden = true;
+    ui.capOpen = false;
+  }
+  function setCapacity(n) {
+    if (CAP_STEPS.indexOf(n) < 0) return;
+    if (n < state.entries.length) {
+      toast('当前箱已有 ' + state.entries.length + ' 词，不能设成 ' + n + '；先封箱或熄灭一些词');
+      return;
+    }
+    state.capacity = n;
+    saveState();
+    closeCapPopover();
+    renderAll();
+    toast('每箱词数改为 ' + n);
+  }
+
+  /* ---------------------------------------------------------------- backup / import */
+  function buildBackup() {
+    return {
+      format: 'pointfield',
+      version: 1,
+      app: '点图 · 标注记忆',
+      exportedAt: new Date().toISOString(),
+      state: JSON.parse(JSON.stringify(state)),
+    };
+  }
+  function exportJsonString() { return JSON.stringify(buildBackup()); }
+  function exportBackupFile() {
+    try {
+      var blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pointfield-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      toast('存档已导出 · 可发到另一台设备「合并导入」');
+      closeMenu();
+    } catch (e) {
+      toast('导出失败：浏览器不允许下载');
+    }
+  }
+  function parseBackup(text) {
+    var obj;
+    try { obj = JSON.parse(text); } catch (e) { return null; }
+    var rawState = obj && obj.format === 'pointfield' ? obj.state : obj;
+    if (!rawState || rawState.v !== 3) return null;
+    var cleaned = sanitize(JSON.parse(JSON.stringify(rawState)));
+    return { format: (obj && obj.format) || 'state', exportedAt: (obj && obj.exportedAt) || '', state: cleaned };
+  }
+  function countWords(st) {
+    var n = st.entries.length;
+    st.sealed.forEach(function (b) { n += b.entries.length; });
+    return n;
+  }
+  function openImportModal(parsed) {
+    ui.pendingImport = parsed;
+    var imp = parsed.state;
+    importSummary.textContent =
+      '存档：' + (parsed.format === 'pointfield' ? '点图存档' : '原始状态') +
+      (parsed.exportedAt ? ' · 导出于 ' + fmtDate(parsed.exportedAt) : '') + '\n' +
+      '导入内容：' + countWords(imp) + ' 词 · ' + imp.sealed.length + ' 个封箱 · 当前箱 ' + imp.entries.length + ' 词\n' +
+      '本机现有：' + countWords(state) + ' 词 · ' + state.sealed.length + ' 个封箱 · 当前箱 ' + state.entries.length + ' 词\n\n' +
+      '合并导入：只追加本机没有的词，不覆盖现有数据（推荐多设备积累）\n' +
+      '覆盖导入：用存档替换本机全部数据（不可撤销）';
+    importModal.hidden = false;
+  }
+  function closeImportModal() { importModal.hidden = true; ui.pendingImport = null; }
+  function nextFreePoint(list) {
+    var used = {};
+    list.forEach(function (e) { used[e.p] = 1; });
+    for (var i = 0; i < MAP_POINTS; i++) if (!used[i]) return i;
+    return 0;
+  }
+  function mergeImport(imp) {
+    var allWords = {}, added = { current: 0, boxes: 0, words: 0, skipped: 0 };
+    state.entries.forEach(function (e) { allWords[e.w] = 1; });
+    state.sealed.forEach(function (b) { b.entries.forEach(function (e) { allWords[e.w] = 1; }); });
+    var boxNo = 1;
+    state.sealed.forEach(function (b) { if (b.boxNo >= boxNo) boxNo = b.boxNo + 1; });
+    var overflow = [];
+    imp.entries.forEach(function (e) {
+      if (allWords[e.w]) { added.skipped++; return; }
+      allWords[e.w] = 1;
+      if (state.entries.length < state.capacity) {
+        state.entries.push({ p: nextFreePoint(state.entries), w: e.w, pieces: e.pieces.slice(), t: e.t || Date.now() });
+        added.current++; added.words++;
+      } else {
+        overflow.push({ w: e.w, pieces: e.pieces.slice(), t: e.t || Date.now() });
+      }
+    });
+    if (overflow.length) {
+      var entries = overflow.map(function (e, i) { return { p: i, w: e.w, pieces: e.pieces, t: e.t }; });
+      state.sealed.push({ boxNo: boxNo++, capacity: 400, entries: entries, sealedAt: new Date().toISOString() });
+      added.boxes++; added.words += entries.length;
+    }
+    imp.sealed.forEach(function (box) {
+      var seenP = {}, nextP = 0, entries = [];
+      box.entries.forEach(function (e) {
+        if (allWords[e.w]) { added.skipped++; return; }
+        allWords[e.w] = 1;
+        var p = (Number.isInteger(e.p) && e.p >= 0 && e.p < MAP_POINTS && !seenP[e.p]) ? e.p : -1;
+        if (p < 0) { while (seenP[nextP]) nextP++; p = nextP; }
+        seenP[p] = 1;
+        entries.push({ p: p, w: e.w, pieces: e.pieces.slice(), t: e.t || Date.now() });
+      });
+      if (!entries.length) return;
+      state.sealed.push({
+        boxNo: boxNo++,
+        capacity: CAP_STEPS.indexOf(box.capacity) >= 0 ? box.capacity : 400,
+        entries: entries,
+        sealedAt: box.sealedAt || new Date().toISOString(),
+      });
+      added.boxes++; added.words += entries.length;
+    });
+    state.pointer = 0;
+    state.boxNo = Math.max(state.boxNo, boxNo);
+    saveState(); renderAll();
+    return added;
+  }
+  function replaceImport(imp) {
+    var savedTemplate = state.template;
+    state = sanitize(JSON.parse(JSON.stringify(imp)));
+    var mode = isMobileLayout() ? 'scroll' : 'fit';
+    if (!savedTemplate || savedTemplate.mode !== mode) state.template = generateTemplate();
+    else state.template = savedTemplate;
+    saveState(); renderAll();
+  }
+  function applyImport(mode) {
+    var parsed = ui.pendingImport;
+    if (!parsed) return;
+    closeImportModal(); closeMenu();
+    if (mode === 'merge') {
+      var added = mergeImport(parsed.state);
+      toast('合并导入完成：新增 ' + added.words + ' 词 · 新增 ' + added.boxes + ' 个封箱 · 跳过重复 ' + added.skipped + ' 词', 3600);
+    } else {
+      replaceImport(parsed.state);
+      toast('已覆盖导入 · 共 ' + countWords(state) + ' 词', 2800);
+    }
+  }
+  function openMenu() {
+    closeCapPopover();
+    renderMenu();
+    menuPopover.hidden = false;
+    var rect = menuBtn.getBoundingClientRect();
+    menuPopover.style.top = Math.round(rect.bottom + 8) + 'px';
+    menuPopover.style.right = Math.round(Math.max(12, window.innerWidth - rect.right)) + 'px';
+    ui.menuOpen = true;
+  }
+  function closeMenu() {
+    menuPopover.hidden = true;
+    ui.menuOpen = false;
+  }
+  function renderMenu() {
+    if (ui.installPrompt) installBtn.hidden = false;
+  }
+
+  function renderAll() {
+    ensureTemplate();
+    layoutMap();
+    renderCard();
+    renderDock();
+    renderHeader();
+  }
+
+  /* ---------------------------------------------------------------- actions */
+  function loadNextWord() {
+    for (var i = state.pointer; i < POOL.length; i++) {
+      if (!isPlaced(POOL[i][0])) {
+        ui.current = POOL[i];
+        ui.currentIndex = i;
+        ui.cuts = [];
+        return;
+      }
+    }
+    ui.current = null;
+    ui.currentIndex = -1;
+    ui.cuts = [];
+  }
+
+  function selectPoint(p) {
+    if (ui.viewSealed != null || ui.train || isFull()) return;
+    if (entryAt(p)) return;
+    if (!ui.current) loadNextWord();
+    ui.selected = p;
+    ui.pinned = null;
+    ui.hover = p;
+    renderAll();
+    scheduleEnsureVisible();
+  }
+
+  function pinPoint(p) {
+    ui.pinned = ui.pinned === p ? null : p;
+    renderDock();
+    layoutMap();
+  }
+
+  function toggleCut(pos) {
+    if (!ui.current) return;
+    var i = ui.cuts.indexOf(pos);
+    if (i >= 0) ui.cuts.splice(i, 1);
+    else {
+      if (ui.cuts.length >= 2) { toast('最多切成 3 份，先取消一个切分'); return; }
+      ui.cuts.push(pos);
+      ui.cuts.sort(function (a, b) { return a - b; });
+    }
+    renderCard();
+  }
+  function clearCuts() { if (!ui.current) return; ui.cuts = []; renderCard(); }
+  function skipWord() {
+    if (!ui.current || ui.splitEdit || ui.replace) return;
+    state.pointer = ui.currentIndex + 1;
+    loadNextWord();
+    renderAll();
+    saveState();
+  }
+  function cancelSelection() {
+    ui.replace = null; ui.splitEdit = null;
+    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null;
+    renderAll();
+  }
+
+  function savePlacement() {
+    if (!ui.current) return;
+    var pieces = piecesFromCuts(ui.current[0], ui.cuts);
+
+    if (ui.splitEdit) {
+      var se = entryAt(ui.splitEdit.p);
+      if (se) se.pieces = pieces;
+      ui.splitEdit = null; ui.current = null; ui.cuts = []; ui.selected = null;
+      toast('切分已更新');
+      saveState(); renderAll(); return;
+    }
+    if (ui.replace) {
+      var oldEntry = ui.replace.old;
+      var idx = -1;
+      for (var i = 0; i < state.entries.length; i++) if (state.entries[i].p === oldEntry.p) { idx = i; break; }
+      if (idx >= 0) state.entries.splice(idx, 1);
+      var oldIdx = poolIndex(oldEntry.w);
+      state.entries.push({ p: oldEntry.p, w: ui.current[0], pieces: pieces, t: Date.now() });
+      if (oldIdx >= 0) state.pointer = Math.min(state.pointer, oldIdx);
+      var newWord = ui.current[0], oldWord = oldEntry.w;
+      ui.replace = null; ui.current = null; ui.cuts = []; ui.selected = null; ui.pinned = null; ui.hover = null;
+      ui.anim = oldEntry.p;
+      flash(newWord, '已替换「' + oldWord + '」· 旧词回到词池');
+      saveState(); renderAll();
+      setTimeout(function () { if (ui.anim === oldEntry.p) { ui.anim = null; layoutMap(); } }, 820);
+      return;
+    }
+    if (ui.selected == null || isFull()) return;
+    var p = ui.selected;
+    state.entries.push({ p: p, w: ui.current[0], pieces: pieces, t: Date.now() });
+    state.pointer = ui.currentIndex + 1;
+    var order = state.entries.length, word = ui.current[0];
+    ui.current = null; ui.selected = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    ui.anim = p;
+    flash(word, '已点亮 · 第 ' + order + ' 个 · ' + pieces.join(' / ') + '（' + pieces.length + ' 份）');
+    saveState(); renderAll();
+    setTimeout(function () { if (ui.anim === p) { ui.anim = null; layoutMap(); } }, 820);
+  }
+
+  function undo() {
+    if (ui.selected != null || ui.current || ui.replace || ui.splitEdit) { cancelSelection(); return; }
+    if (!state.entries.length) { toast('没有可撤回的放置'); return; }
+    var last = state.entries.pop();
+    var idx = poolIndex(last.w);
+    if (idx >= 0) state.pointer = Math.min(state.pointer, idx);
+    ui.pinned = null; ui.hover = null;
+    flash(last.w, '已撤回 · 该点重新变回空位');
+    saveState(); renderAll();
+  }
+
+  function extinguish(p) {
+    var idx = -1;
+    for (var i = 0; i < state.entries.length; i++) if (state.entries[i].p === p) { idx = i; break; }
+    if (idx < 0) return;
+    var w = state.entries[idx].w;
+    state.entries.splice(idx, 1);
+    var pi = poolIndex(w);
+    if (pi >= 0) state.pointer = Math.min(state.pointer, pi);
+    ui.pinned = null; ui.hover = null;
+    toast('已熄灭「' + w + '」· 该词回到词池');
+    saveState(); renderAll();
+  }
+
+  function startReplace(p) {
+    var e = entryAt(p);
+    if (!e) return;
+    if (!ui.current) loadNextWord();
+    if (!ui.current) { toast('词池已空，暂时没有可替换的词'); return; }
+    ui.replace = { p: p, old: { p: e.p, w: e.w, pieces: e.pieces.slice() } };
+    ui.splitEdit = null;
+    ui.selected = p;
+    ui.pinned = null;
+    renderAll();
+    scheduleEnsureVisible();
+  }
+
+  function startSplitEdit(p) {
+    var e = entryAt(p);
+    if (!e) return;
+    var word = findWord(e.w) || [e.w, '', '', '', 'cet4', ''];
+    ui.splitEdit = { p: p };
+    ui.replace = null;
+    ui.selected = p;
+    ui.current = word;
+    ui.cuts = cutsFromPieces(e.w, e.pieces);
+    ui.pinned = null;
+    closeDrawer();
+    renderAll();
+    scheduleEnsureVisible();
+  }
+
+  function sealBox() {
+    if (!state.entries.length) { toast('本箱还是空的'); return; }
+    if (ui.viewSealed != null) return;
+    var boxNo = state.boxNo;
+    state.sealed.push({ boxNo: state.boxNo, capacity: state.capacity, entries: state.entries.slice(), sealedAt: new Date().toISOString() });
+    state.boxNo++;
+    state.entries = [];
+    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    flash('第 ' + boxNo + ' 箱已封存', '箱库 +1 · 可在箱库选择这一箱训练');
+    saveState(); renderAll();
+  }
+
+  function openSealed(boxNo) {
+    if (!state.sealed.some(function (b) { return b.boxNo === boxNo; })) return;
+    ui.viewSealed = boxNo;
+    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    closeDrawer();
+    renderAll();
+  }
+  function backToCurrentBox() {
+    ui.viewSealed = null;
+    ui.pinned = null; ui.hover = null;
+    renderAll();
+  }
+
+  /* ---------------------------------------------------------------- drawers */
+  function openDrawer(kind) {
+    ui.drawer = kind;
+    drawerEl.hidden = false;
+    scrim.hidden = false;
+    drawerEl.setAttribute('aria-hidden', 'false');
+    renderDrawer();
+  }
+  function closeDrawer() {
+    ui.drawer = null;
+    drawerEl.hidden = true;
+    scrim.hidden = true;
+    drawerEl.setAttribute('aria-hidden', 'true');
+  }
+
+  function allAnnotatedRows() {
+    var rows = [];
+    state.entries.forEach(function (e) {
+      rows.push({ boxNo: state.boxNo, p: e.p, w: e.w, pieces: e.pieces, t: e.t, sealed: false });
+    });
+    state.sealed.forEach(function (box) {
+      box.entries.forEach(function (e) {
+        rows.push({ boxNo: box.boxNo, p: e.p, w: e.w, pieces: e.pieces, t: e.t || box.sealedAt, sealed: true });
+      });
+    });
+    rows.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+    return rows;
+  }
+
+  function renderDrawer() {
+    if (!ui.drawer) return;
+    if (ui.drawer === 'annotated') {
+      drawerTitle.textContent = '已标注词汇';
+      var rows = allAnnotatedRows();
+      drawerMeta.textContent = rows.length + ' 条 · 当前箱可编辑/熄灭，封存箱只读';
+      var html = '<div class="drawer-tools">' +
+        '<input id="annotSearch" class="annot-search" type="search" placeholder="搜索单词或片段…" autocomplete="off">' +
+        '<button class="btn-mini" id="exportCsv">导出 CSV</button>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<p class="drawer-empty">还没有写入的词。<br>回点图，点一个空位开始标注。</p>';
+      } else {
+        html += '<div class="annot-table-wrap"><table class="annot-table"><thead><tr>' +
+          '<th>单词</th><th>拆分</th><th>点</th><th>箱</th><th>时间</th><th></th>' +
+          '</tr></thead><tbody id="annotTbody">' + rows.slice(0, 300).map(function (r) {
+            var canEdit = !r.sealed;
+            return '<tr data-search="' + esc((r.w + ' ' + r.pieces.join('')).toLowerCase()) + '">' +
+              '<td class="aw">' + esc(r.w) + '</td>' +
+              '<td class="ap">' + r.pieces.map(function (p) { return '<span class="piece">' + esc(p) + '</span>'; }).join('<span class="pipe">/</span>') + '</td>' +
+              '<td class="an">' + (r.p + 1) + '</td>' +
+              '<td class="an">' + (r.sealed ? '第 ' + r.boxNo + ' 箱 🔒' : '第 ' + r.boxNo + ' 箱') + '</td>' +
+              '<td class="at">' + fmtDate(new Date(r.t || 0).toISOString()) + '</td>' +
+              '<td class="ao">' + (canEdit
+                ? '<button class="link-btn" data-edit="' + r.p + '">编辑切分</button><button class="link-btn del" data-del="' + r.p + '">熄灭</button>'
+                : '<span class="lock">只读</span>') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          (rows.length > 300 ? '<p class="drawer-empty">仅显示最近 300 条，导出 CSV 获取全部。</p>' : '');
+      }
+      drawerBody.innerHTML = html;
+      var search = $('annotSearch');
+      if (search) search.addEventListener('input', function () {
+        var q = this.value.trim().toLowerCase();
+        var trs = drawerBody.querySelectorAll('#annotTbody tr');
+        for (var i = 0; i < trs.length; i++) {
+          trs[i].hidden = q && trs[i].getAttribute('data-search').indexOf(q) < 0;
+        }
+      });
+    } else if (ui.drawer === 'boxes') {
+      drawerTitle.textContent = '箱库';
+      drawerMeta.textContent = state.sealed.length + ' 个箱子 · 训练词库 = 已封箱的箱子';
+      if (!state.sealed.length) {
+        drawerBody.innerHTML = '<p class="drawer-empty">还没有封存的箱子。<br>点图里点亮一些词后，按底部「封箱」，箱子会出现在这里。</p>';
+        return;
+      }
+      drawerBody.innerHTML = state.sealed.slice().sort(function (a, b) { return b.boxNo - a.boxNo; }).map(function (box) {
+        return '<div class="box-card">' +
+          '<div class="box-info"><b>第 ' + box.boxNo + ' 箱</b>' +
+          '<span>容量 ' + box.capacity + ' 词 · 实收 ' + box.entries.length + ' 词 · 封存于 ' + fmtDate(box.sealedAt) + '</span></div>' +
+          '<div class="box-actions">' +
+          '<button class="btn-mini" data-review="' + box.boxNo + '">回看</button>' +
+          '<button class="btn-mini primary" data-train="' + box.boxNo + '">训练这箱</button>' +
+          '</div></div>';
+      }).join('');
+    }
+  }
+
+  function exportCsv() {
+    var rows = allAnnotatedRows();
+    if (!rows.length) { toast('还没有标注可导出'); return; }
+    function cell(v) {
+      var s = String(v == null ? '' : v);
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    var lines = ['word,level,freq_rank,n_pieces,pieces,box,point,annotated_at'];
+    rows.forEach(function (r) {
+      var w = findWord(r.w);
+      lines.push([r.w, w ? w[4] : '', w ? w[5] : '', r.pieces.length, r.pieces.join('|'), r.boxNo, r.p + 1,
+        new Date(r.t || Date.now()).toISOString()].map(cell).join(','));
+    });
+    var blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'word-annotations-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    toast('已导出 ' + rows.length + ' 条标注 CSV');
+  }
+
+  /* ---------------------------------------------------------------- training */
+  function startTraining(boxNo) {
+    var box = state.sealed.filter(function (b) { return b.boxNo === boxNo; })[0];
+    if (!box || !box.entries.length) { toast('这个箱子还没有词'); return; }
+    closeDrawer();
+    var rnd = Math.random;
+    var words = shuffle(box.entries, rnd).slice(0, 10);
+    var qs = words.map(function (e) {
+      var w = findWord(e.w);
+      var correct = w && w[3] ? w[3] : e.w;
+      var opts = [correct], guard = 0;
+      while (opts.length < 4 && guard++ < 500) {
+        var cand = POOL[Math.floor(rnd() * POOL.length)];
+        if (!cand || !cand[3] || cand[3] === correct || cand[0] === e.w) continue;
+        if (opts.indexOf(cand[3]) >= 0) continue;
+        opts.push(cand[3]);
+      }
+      opts = shuffle(opts, rnd);
+      return { entry: e, word: w, correct: correct, options: opts, answer: opts.indexOf(correct) };
+    });
+    ui.train = { boxNo: boxNo, qs: qs, idx: 0, correct: 0, answered: false };
+    ui.viewSealed = null;
+    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null;
+    trainView.hidden = false;
+    renderTrain();
+  }
+  function endTrainingUi() {
+    ui.train = null;
+    trainView.hidden = true;
+    renderAll();
+  }
+  function renderTrain() {
+    var t = ui.train;
+    if (!t) return;
+    var q = t.qs[t.idx];
+    $('trainBoxLabel').textContent = '第 ' + t.boxNo + ' 箱';
+    $('trainCount').textContent = (t.idx + 1) + ' / ' + t.qs.length;
+    $('trainFill').style.width = ((t.idx) / t.qs.length * 100) + '%';
+    $('trainCard').hidden = false;
+    $('trainEnd').hidden = true;
+    $('trainFeedback').hidden = true;
+    $('trainLevel').textContent = (q.word && q.word[4] === 'cet6') ? 'CET6 新增' : 'CET4';
+    $('trainWord').textContent = q.entry.w;
+    $('trainPhon').textContent = q.word && q.word[1] ? '/' + q.word[1] + '/' : '';
+    $('trainOptions').innerHTML = q.options.map(function (opt, i) {
+      return '<button class="opt" data-i="' + i + '"><span class="opt-key">' + (i + 1) + '</span><span class="opt-text">' + esc(opt) + '</span></button>';
+    }).join('');
+    t.answered = false;
+  }
+  function answerTrain(i) {
+    var t = ui.train;
+    if (!t || t.answered) return;
+    var q = t.qs[t.idx];
+    var ok = i === q.answer;
+    t.answered = true;
+    if (ok) t.correct++;
+    var opts = $('trainOptions').querySelectorAll('.opt');
+    for (var k = 0; k < opts.length; k++) {
+      opts[k].disabled = true;
+      if (k === q.answer) opts[k].classList.add('correct');
+      else if (k === i) opts[k].classList.add('wrong');
+      else opts[k].classList.add('dim');
+    }
+    $('trainVerdict').textContent = ok ? '答对了' : '再记一次';
+    $('trainVerdict').className = 'verdict' + (ok ? '' : ' bad');
+    $('trainFbWord').textContent = q.entry.w + (q.word && q.word[1] ? '  /' + q.word[1] + '/' : '');
+    $('trainFbTrans').textContent = (q.word ? q.word[3] : '') + (q.entry.pieces.length > 1 ? '　·　' + q.entry.pieces.join(' / ') : '');
+    $('trainFeedback').hidden = false;
+  }
+  function nextTrain() {
+    var t = ui.train;
+    if (!t) return;
+    if (t.idx >= t.qs.length - 1) { finishTraining(); return; }
+    t.idx++;
+    renderTrain();
+  }
+  function finishTraining() {
+    var t = ui.train;
+    if (!t) return;
+    var score = t.correct, total = t.qs.length;
+    var stars = score / total >= 0.9 ? 3 : (score / total >= 0.7 ? 2 : 1);
+    $('trainCard').hidden = true;
+    $('trainFeedback').hidden = true;
+    $('trainEnd').hidden = false;
+    $('trainStars').innerHTML = [0, 1, 2].map(function (i) { return '<span class="' + (i < stars ? '' : 'off') + '">★</span>'; }).join('');
+    $('trainEndTitle').textContent = '第 ' + t.boxNo + ' 箱 · 练完一轮';
+    $('trainEndSub').textContent = '答对 ' + score + ' / ' + total + ' · 词库 = 已封箱的箱子';
+    $('trainFill').style.width = '100%';
+    $('trainCount').textContent = total + ' / ' + total;
+  }
+
+  /* ---------------------------------------------------------------- toast / flash */
+  function toast(msg, ms) {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    if (ui.toastTimer) clearTimeout(ui.toastTimer);
+    ui.toastTimer = setTimeout(function () { toastEl.hidden = true; }, ms || 2000);
+  }
+  function flash(primary, secondary) {
+    ui.flash = { primary: primary, secondary: secondary };
+    if (ui.flashTimer) clearTimeout(ui.flashTimer);
+    ui.flashTimer = setTimeout(function () { ui.flash = null; renderDock(); }, 2800);
+  }
+
+  /* ---------------------------------------------------------------- events */
+  mapEl.addEventListener('pointermove', function (event) {
+    var g = event.target && event.target.closest ? event.target.closest('.pt') : null;
+    var i = g ? Number(g.dataset.i) : null;
+    if (i === ui.hover) return;
+    ui.hover = i;
+    renderDock();
+  });
+  mapEl.addEventListener('pointerleave', function () {
+    if (ui.hover == null) return;
+    ui.hover = null;
+    renderDock();
+  });
+  mapEl.addEventListener('click', function (event) {
+    var g = event.target && event.target.closest ? event.target.closest('.pt') : null;
+    if (!g) {
+      if (ui.pinned != null) { ui.pinned = null; renderDock(); layoutMap(); }
+      return;
+    }
+    var p = Number(g.dataset.i);
+    var occupied = currentViewEntries().some(function (e) { return e.p === p; });
+    if (occupied) { pinPoint(p); return; }
+    if (ui.viewSealed != null || ui.train || isFull()) return;
+    selectPoint(p);
+  });
+
+  wordRow.addEventListener('click', function (event) {
+    var cut = event.target && event.target.closest ? event.target.closest('.cut') : null;
+    if (cut) toggleCut(Number(cut.dataset.c));
+  });
+  skipBtn.addEventListener('click', skipWord);
+  clearBtn.addEventListener('click', clearCuts);
+  saveBtn.addEventListener('click', savePlacement);
+
+  dockEl.addEventListener('click', function (event) {
+    var btn = event.target && event.target.closest ? event.target.closest('[data-action]') : null;
+    if (!btn) return;
+    var action = btn.dataset.action;
+    if (action === 'seal') sealBox();
+    else if (action === 'replace' && ui.pinned != null) startReplace(ui.pinned);
+    else if (action === 'extinguish' && ui.pinned != null) extinguish(ui.pinned);
+  });
+
+  boxPill.addEventListener('click', function (event) {
+    event.stopPropagation();
+    closeMenu();
+    if (ui.capOpen) closeCapPopover(); else openCapPopover();
+  });
+  capOptions.addEventListener('click', function (event) {
+    var opt = event.target && event.target.closest ? event.target.closest('[data-cap]') : null;
+    if (opt) setCapacity(Number(opt.dataset.cap));
+  });
+
+  menuBtn.addEventListener('click', function (event) {
+    event.stopPropagation();
+    if (ui.capOpen) closeCapPopover();
+    if (ui.menuOpen) closeMenu(); else openMenu();
+  });
+  exportBtn.addEventListener('click', exportBackupFile);
+  importBtn.addEventListener('click', function () { closeMenu(); importFile.click(); });
+  importFile.addEventListener('change', function () {
+    var file = importFile.files && importFile.files[0];
+    importFile.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var parsed = parseBackup(String(reader.result));
+      if (!parsed) { toast('导入失败：不是有效的点图存档'); return; }
+      openImportModal(parsed);
+    };
+    reader.onerror = function () { toast('读取文件失败'); };
+    reader.readAsText(file);
+  });
+  importCancel.addEventListener('click', closeImportModal);
+  importMergeBtn.addEventListener('click', function () { applyImport('merge'); });
+  importReplaceBtn.addEventListener('click', function () { applyImport('replace'); });
+  importModal.addEventListener('click', function (event) { if (event.target === importModal) closeImportModal(); });
+  installBtn.addEventListener('click', function () {
+    var prompt = ui.installPrompt;
+    closeMenu();
+    if (!prompt) return;
+    prompt.prompt();
+    if (prompt.userChoice && prompt.userChoice.then) {
+      prompt.userChoice.then(function () { ui.installPrompt = null; installBtn.hidden = true; });
+    }
+  });
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    ui.installPrompt = event;
+    if (ui.menuOpen) renderMenu();
+  });
+
+  document.addEventListener('click', function (event) {
+    if (ui.capOpen && !capPopover.contains(event.target) && !boxPill.contains(event.target)) closeCapPopover();
+    if (ui.menuOpen && !menuPopover.contains(event.target) && !menuBtn.contains(event.target)) closeMenu();
+  });
+
+  annotatedBtn.addEventListener('click', function () { openDrawer('annotated'); });
+  boxesBtn.addEventListener('click', function () { openDrawer('boxes'); });
+  drawerClose.addEventListener('click', closeDrawer);
+  scrim.addEventListener('click', closeDrawer);
+  backToCurrent.addEventListener('click', backToCurrentBox);
+
+  drawerBody.addEventListener('click', function (event) {
+    var t = event.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#exportCsv')) { exportCsv(); return; }
+    var editBtn = t.closest('[data-edit]');
+    if (editBtn) { startSplitEdit(Number(editBtn.dataset.edit)); return; }
+    var delBtn = t.closest('[data-del]');
+    if (delBtn) { extinguish(Number(delBtn.dataset.del)); renderDrawer(); return; }
+    var rev = t.closest('[data-review]');
+    if (rev) { openSealed(Number(rev.dataset.review)); return; }
+    var tr = t.closest('[data-train]');
+    if (tr) { startTraining(Number(tr.dataset.train)); return; }
+  });
+
+  $('trainQuit').addEventListener('click', endTrainingUi);
+  $('trainBack').addEventListener('click', endTrainingUi);
+  $('trainAgain').addEventListener('click', function () { var boxNo = ui.train ? ui.train.boxNo : null; if (boxNo != null) startTraining(boxNo); });
+  $('trainNext').addEventListener('click', nextTrain);
+  $('trainOptions').addEventListener('click', function (event) {
+    var opt = event.target && event.target.closest ? event.target.closest('.opt') : null;
+    if (opt) answerTrain(Number(opt.dataset.i));
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (ui.train) {
+      if (/^[1-4]$/.test(event.key) && !$('trainCard').hidden) answerTrain(Number(event.key) - 1);
+      else if (event.key === 'Enter' && !$('trainFeedback').hidden) nextTrain();
+      else if (event.key === 'Escape') endTrainingUi();
+      return;
+    }
+    if (event.key === 'Enter' && ui.current) { event.preventDefault(); savePlacement(); return; }
+    if ((event.key === 's' || event.key === 'S') && ui.current && !event.ctrlKey && !event.metaKey) { skipWord(); return; }
+    if (event.key === 'Escape') {
+      if (!importModal.hidden) { closeImportModal(); return; }
+      if (ui.menuOpen) { closeMenu(); return; }
+      if (ui.capOpen) { closeCapPopover(); return; }
+      if (ui.drawer) { closeDrawer(); return; }
+      if (ui.pinned != null) { ui.pinned = null; renderDock(); layoutMap(); return; }
+      if (ui.current || ui.selected != null || ui.replace || ui.splitEdit) { cancelSelection(); return; }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+      event.preventDefault();
+      undo();
+    }
+  });
+
+  var resizeQueued = false;
+  function onResize() {
+    if (resizeQueued) return;
+    resizeQueued = true;
+    requestAnimationFrame(function () {
+      resizeQueued = false;
+      var mode = isMobileLayout() ? 'scroll' : 'fit';
+      if (!state.template || state.template.mode !== mode) renderAll();
+      else layoutMap();
+    });
+  }
+  window.addEventListener('resize', onResize);
+  if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
+
+  /* ---------------------------------------------------------------- init */
+  function init() {
+    renderAll();
+    window.__PROTO_READY = true;
+  }
+  init();
+
+  /* 调试 / 截图接口 */
+  window.__proto = {
+    get state() { return state; },
+    ui: ui,
+    selectPoint: selectPoint,
+    savePlacement: savePlacement,
+    skipWord: skipWord,
+    toggleCut: toggleCut,
+    sealBox: sealBox,
+    undo: undo,
+    entryAt: entryAt,
+    openDrawer: openDrawer,
+    startTraining: startTraining,
+    setCapacity: setCapacity,
+    exportJson: function () { return exportJsonString(); },
+    importJson: function (text, mode) {
+      var parsed = parseBackup(typeof text === 'string' ? text : JSON.stringify(text));
+      if (!parsed) return null;
+      if (mode === 'replace') { replaceImport(parsed.state); return { mode: 'replace', words: countWords(state) }; }
+      return mergeImport(parsed.state);
+    },
+    backupSummary: function () { return { words: countWords(state), sealed: state.sealed.length, entries: state.entries.length }; },
+    demoFill: function (n) {
+      for (var k = 0; k < n; k++) {
+        if (state.entries.length >= state.capacity) break;
+        if (!ui.current) loadNextWord();
+        if (!ui.current) break;
+        var free = -1, used = {};
+        state.entries.forEach(function (e) { used[e.p] = 1; });
+        for (var i = 0; i < MAP_POINTS; i++) { if (!used[i]) { free = i; break; } }
+        if (free < 0) break;
+        var w = ui.current[0];
+        var pieces = [w];
+        if (w.length >= 5 && Math.random() < 0.75) {
+          var cut = Math.floor(w.length / 2) + (Math.random() < 0.5 ? 0 : 1);
+          if (cut > 0 && cut < w.length) pieces = [w.slice(0, cut), w.slice(cut)];
+        }
+        state.entries.push({ p: free, w: w, pieces: pieces, t: Date.now() });
+        state.pointer = ui.currentIndex + 1;
+        ui.current = null;
+      }
+      ui.selected = null; ui.cuts = []; ui.pinned = null; ui.hover = null; ui.flash = null;
+      saveState(); renderAll();
+    },
+    pointIndexAwayFromCard: function () {
+      var W = stageW, H = stageH;
+      for (var i = 0; i < state.template.points.length; i++) {
+        var x = state.template.points[i][0] * W, y = state.template.points[i][1] * H;
+        if (x < W * 0.26 && y > H * 0.3 && y < H * 0.7) return i;
+      }
+      return 0;
+    },
+  };
+})();
+
+</script>
+<script>
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+    window.addEventListener("load", function () { navigator.serviceWorker.register("./sw.js").catch(function () {}); });
+  }
+</script>
+</body>
+</html>
