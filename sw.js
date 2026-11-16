@@ -1,5 +1,5 @@
 /* 点图 · 标注记忆 service worker（离线缓存） */
-const CACHE = 'pointfield-mweyd3ll';
+const CACHE = 'pointfield-mwjg9psx';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -17,11 +17,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  if (req.mode === 'navigate') {
+    /* 导航请求：网络优先（拿新版本），失败再回退缓存的 index.html */
+    event.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put('./index.html', copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+  /* 其他资源：缓存优先，网络成功才更新；失败不回退 HTML（避免图片拿到 HTML） */
   event.respondWith(
     caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+      }
       return res;
-    }).catch(() => caches.match('./index.html')))
+    }))
   );
 });

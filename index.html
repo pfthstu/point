@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="description" content="点图 · 标注记忆：选点 → 标注 → 点亮；每箱词数 100/200/300/400；封箱后可选取训练；手机点图可滑动。">
-<title>点图 · 标注记忆（融合原型 v0.4）</title>
+<title>点图 · 标注记忆（融合原型 v0.6）</title>
 <style>
 /* =========================================================================
    点图 × 拆分标注 · 融合原型
@@ -58,7 +58,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 /* ---------------------------------------------------------------- topbar */
 .topbar{
   display:flex; align-items:center; gap:18px;
-  padding:clamp(12px,2vh,20px) 2px 8px;
+  padding:calc(clamp(12px,2vh,20px) + env(safe-area-inset-top, 0px)) 2px 8px;
 }
 .brand{ display:flex; align-items:baseline; gap:12px; min-width:0; }
 .brand-title{
@@ -210,8 +210,11 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 .word-row .ch{ flex:none; }
 .word-row .ch.space{ opacity:.45; font-size:.58em; transform:translateY(-.18em); }
 .word-row .cut{
-  flex:none; width:10px; height:1.12em; margin:0; padding:0; border:0;
+  flex:none; width:14px; height:1.12em; margin:0; padding:0; border:0;
   background:transparent; cursor:pointer; position:relative;
+}
+.word-row .cut::before{
+  content:""; position:absolute; inset:-8px -5px;   /* 扩大触控热区 */
 }
 .word-row .cut::after{
   content:""; position:absolute; left:50%; top:4%; bottom:4%; width:2px;
@@ -244,7 +247,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   margin:8px 0 0; min-height:16px;
   font-size:11.5px; line-height:1.55; letter-spacing:.03em; color:var(--mute);
 }
-.card-actions{ display:flex; gap:9px; margin-top:12px; }
+.card-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .btn-card{
   appearance:none; cursor:pointer; border-radius:12px;
   font-size:13px; font-weight:600; line-height:1; padding:11px 14px;
@@ -324,6 +327,9 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 }
 @media (max-width: 720px){
   .topbar{ gap:10px; }
+  .card-actions .btn-card{ font-size:12px; padding:10px 8px; }
+  .card-actions .btn-card.ghost{ min-width:56px; }
+  .card-actions .btn-card.primary{ min-width:104px; }
   .annot-card{ width:88vw; padding:13px 14px 12px; }
   .card-body{ min-height:140px; }
   .word-row{ min-height:50px; margin-top:8px; }
@@ -454,7 +460,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   background:
     radial-gradient(1000px 700px at 50% 20%, #0b1426 0%, #070b13 60%, #04060b 100%);
 }
-.train-top{ display:flex; align-items:center; gap:14px; padding:16px 2px 10px; max-width:760px; width:100%; margin:0 auto; }
+.train-top{ display:flex; align-items:center; gap:14px; padding:calc(16px + env(safe-area-inset-top, 0px)) 2px 10px; max-width:760px; width:100%; margin:0 auto; }
 .train-mid{ flex:1; display:flex; align-items:center; gap:12px; }
 .train-mid .track{ flex:1; height:6px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
 .train-mid .track i{ display:block; height:100%; width:0%; background:linear-gradient(90deg,#7ff3dd,#5eead4 45%,#38bdf8); border-radius:999px; transition:width .3s ease; }
@@ -522,7 +528,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 @media (max-width: 720px){
   .top-actions .btn{ padding:7px 9px; font-size:11px; }
   .drawer{ width:100vw; }
-  .train-top{ padding-top:12px; }
+  .train-top{ padding-top:calc(12px + env(safe-area-inset-top, 0px)); }
   .qword{ font-size:32px; }
   .qcard{ padding:16px 16px 14px; }
   .train-feedback{ bottom:10px; }
@@ -609,6 +615,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
         <p class="card-hint" id="cardHint">在图中点一个空位</p>
       </div>
       <div class="card-actions">
+        <button class="btn-card ghost" id="cancelBtn" disabled>取消</button>
         <button class="btn-card ghost" id="skipBtn" disabled>跳过</button>
         <button class="btn-card ghost" id="clearBtn" disabled>清空切分</button>
         <button class="btn-card primary" id="saveBtn" disabled>保存并点亮</button>
@@ -644,6 +651,17 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   </div>
 </div>
 
+<div class="modal-wrap" id="confirmModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h3 id="confirmTitle">确认</h3>
+    <p class="modal-body" id="confirmBody"></p>
+    <div class="modal-actions">
+      <button class="btn-mini" id="confirmCancel">取消</button>
+      <button class="btn-mini primary" id="confirmOk">确定</button>
+    </div>
+  </div>
+</div>
+
 <div class="popover" id="capPopover" hidden>
   <div class="pop-title">每箱词数</div>
   <div class="cap-options" id="capOptions"></div>
@@ -652,7 +670,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 
 <div class="scrim" id="scrim" hidden></div>
 
-<aside class="drawer" id="drawer" aria-hidden="true" hidden>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1" hidden>
   <div class="drawer-head">
     <h2 id="drawerTitle">已标注词汇</h2>
     <span class="drawer-meta" id="drawerMeta"></span>
@@ -662,7 +680,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 </aside>
 
 <!-- 训练：词库 = 已封箱的箱子，箱子来自「箱库」选择 -->
-<section class="train-view" id="trainView" hidden aria-label="箱训练">
+<section class="train-view" id="trainView" role="dialog" aria-modal="true" hidden aria-label="箱训练">
   <header class="train-top">
     <button class="icon-btn" id="trainQuit" title="退出训练">✕</button>
     <div class="train-mid">
@@ -699,7 +717,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   </main>
 </section>
 
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 /* demo word pool for the fusion prototype: 600 CET words (mid-frequency slice of word_trainer/data/words.json; budget forced first) */
@@ -708,23 +726,29 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
 </script>
 <script>
 /* =========================================================================
-   点图 · 标注记忆 · 融合原型 v0.4
+   点图 · 标注记忆 · 融合原型 v0.6
    点空位 → 中央标注卡刷新待标注词 → 切分 → 保存 → 点亮该点
    点已点亮的点 → 读数条显示标签；可改词 / 熄灭
    每箱词数：100 / 200 / 300 / 400（100 阶梯，400 封顶；地图固定 400 点）
    封箱（达到目标词数为主操作，也可提前封）→ 箱库 → 选一箱训练
    手机：点图画布可上下滑动，卡片固定在中间；点不再缩小挤在一起
+   v0.6：审查报告修复 —— 弹层视口夹取、跨状态清理、resize 重建模板、
+        保存不变量、坏档备份、覆盖导入二次确认+自动备份、输入框快捷键盘保护、
+        hitR 最近邻约束、抽屉搜索/滚动保持、跳过回绕、时间戳校验、导入校验、
+        多标签同步、PWA 生产包剥离调试接口等。
    ========================================================================= */
 (function () {
   'use strict';
 
+  var DEV = false;                     // 生产构建（PWA）会置为 false 并剥离调试接口
   var POOL = (window.WORD_POOL || []).slice();
   var CAP_STEPS = [100, 200, 300, 400];
   var DEFAULT_CAPACITY = 100;
   var MAP_POINTS = 400;
   var TOTAL_WORDS = 7838;
-  var BASE_ANNOTATED = 1123;          // 对齐草图里的起始进度（演示值）
   var STORE_KEY = 'pointfield.proto.v3';
+  var BREAK_PREFIX = STORE_KEY + '.broken.';
+  var AUTOBACKUP_PREFIX = STORE_KEY + '.autobackup.';
 
   var POS_LABEL = { n: '名词', v: '动词', adj: '形容词', adv: '副词', prep: '介词', conj: '连词', pron: '代词', num: '数词', art: '冠词', int: '感叹词', other: '其他' };
   var POS_MAP = { n: 'n', v: 'v', vt: 'v', vi: 'v', aux: 'v', a: 'adj', adj: 'adj', ad: 'adv', adv: 'adv', prep: 'prep', conj: 'conj', pron: 'pron', num: 'num', art: 'art', int: 'int' };
@@ -791,6 +815,23 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     function p(n) { return (n < 10 ? '0' : '') + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  /* 时间戳容错：非法值/坏字符串一律回落到 fallback（默认 now），避免渲染崩溃 */
+  function numTime(v, fallback) {
+    if (typeof v === 'number' && isFinite(v) && v > 0) return v;
+    if (typeof v === 'string' && v) {
+      var t = Date.parse(v);
+      if (!isNaN(t)) return t;
+    }
+    return fallback || Date.now();
+  }
+  function safeIso(v) {
+    var t = numTime(v, 0);
+    return t ? new Date(t).toISOString() : '';
+  }
+  function stepForCount(n) {
+    for (var i = 0; i < CAP_STEPS.length; i++) if (CAP_STEPS[i] >= n) return CAP_STEPS[i];
+    return 400;
+  }
 
   /* ---------------------------------------------------------------- state */
   function freshState() {
@@ -798,73 +839,119 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
   function sanitize(raw) {
     var out = freshState();
-    if (!raw || raw.v !== 3) return out;
-    out.boxNo = Number.isInteger(raw.boxNo) && raw.boxNo > 0 ? raw.boxNo : 1;
-    out.capacity = CAP_STEPS.indexOf(raw.capacity) >= 0 ? raw.capacity : DEFAULT_CAPACITY;
-    out.pointer = Number.isInteger(raw.pointer) ? Math.max(0, Math.min(raw.pointer, POOL.length)) : 0;
-    var seen = {};
-    if (Array.isArray(raw.entries)) {
-      for (var i = 0; i < raw.entries.length; i++) {
-        var e = raw.entries[i];
-        if (!e || !Number.isInteger(e.p) || e.p < 0 || e.p >= MAP_POINTS || seen[e.p] || typeof e.w !== 'string' || !e.w) continue;
-        var pieces = Array.isArray(e.pieces) && e.pieces.join('') === e.w ? e.pieces.map(String) : [e.w];
-        seen[e.p] = true;
-        out.entries.push({ p: e.p, w: e.w, pieces: pieces, t: e.t || Date.now() });
+    if (!raw || typeof raw !== 'object') return out;
+    if (raw.v !== undefined && raw.v !== 3) return out;     // 版本不符：由 readState 负责备份+提示
+    var seenWords = {};
+    function cleanEntries(list, max) {
+      var res = [], usedP = {};
+      if (!Array.isArray(list)) return res;
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        if (!e || typeof e !== 'object') continue;
+        var p = Number(e.p);
+        var w = typeof e.w === 'string' ? e.w.trim() : '';
+        if (!Number.isInteger(p) || p < 0 || p >= MAP_POINTS || usedP[p] || !w) continue;
+        if (seenWords[w]) continue;                          // 一个词只属于一个点/箱
+        var pieces = Array.isArray(e.pieces) && e.pieces.length && e.pieces.join('') === w
+          ? e.pieces.map(String)
+          : [w];
+        seenWords[w] = 1;
+        usedP[p] = 1;
+        res.push({ p: p, w: w, pieces: pieces, t: numTime(e.t, 0) });
+        if (res.length >= max) break;
       }
+      return res;
     }
+    out.entries = cleanEntries(raw.entries, MAP_POINTS);
+    out.capacity = CAP_STEPS.indexOf(raw.capacity) >= 0 ? raw.capacity : DEFAULT_CAPACITY;
+    if (out.entries.length > out.capacity) out.capacity = stepForCount(out.entries.length);
     if (Array.isArray(raw.sealed)) {
       raw.sealed.forEach(function (box) {
-        if (!box || !Array.isArray(box.entries)) return;
-        var entries = box.entries.filter(function (e) {
-          return e && Number.isInteger(e.p) && typeof e.w === 'string' && e.w;
-        }).map(function (e) {
-          return {
-            p: e.p, w: e.w,
-            pieces: Array.isArray(e.pieces) && e.pieces.join('') === e.w ? e.pieces.map(String) : [e.w],
-            t: e.t || box.sealedAt || Date.now(),
-          };
-        });
+        if (!box || typeof box !== 'object') return;
+        var entries = cleanEntries(box.entries, MAP_POINTS);
+        if (!entries.length) return;
+        var cap = CAP_STEPS.indexOf(box.capacity) >= 0 ? box.capacity : stepForCount(entries.length);
+        if (cap < entries.length) cap = stepForCount(entries.length);
         out.sealed.push({
-          boxNo: box.boxNo || 0,
-          capacity: CAP_STEPS.indexOf(box.capacity) >= 0 ? box.capacity : DEFAULT_CAPACITY,
+          boxNo: Number.isInteger(box.boxNo) && box.boxNo > 0 ? box.boxNo : 0,
+          capacity: cap,
           entries: entries,
-          sealedAt: box.sealedAt || new Date().toISOString(),
+          sealedAt: safeIso(box.sealedAt) || new Date().toISOString(),
         });
       });
     }
+    /* 箱号唯一化（重复的往后顺延），并保证当前箱号大于所有封箱 */
+    var usedBox = {}, maxBox = 0;
+    out.sealed.forEach(function (b) {
+      if (b.boxNo > 0 && !usedBox[b.boxNo]) { usedBox[b.boxNo] = 1; maxBox = Math.max(maxBox, b.boxNo); }
+      else b.boxNo = 0;
+    });
+    out.sealed.forEach(function (b) {
+      if (b.boxNo === 0) { maxBox += 1; b.boxNo = maxBox; usedBox[b.boxNo] = 1; }
+    });
+    out.sealed.sort(function (a, b) { return a.boxNo - b.boxNo; });
+    out.boxNo = Number.isInteger(raw.boxNo) && raw.boxNo > 0 ? raw.boxNo : maxBox + 1;
+    if (out.boxNo <= maxBox) out.boxNo = maxBox + 1;
     var tpl = raw.template;
     if (tpl && (tpl.mode === 'fit' || tpl.mode === 'scroll') && Number.isFinite(tpl.plateH) && Array.isArray(tpl.points)) {
       var pts = tpl.points.filter(function (pt) {
-        return Array.isArray(pt) && pt.length === 2 && typeof pt[0] === 'number' && typeof pt[1] === 'number';
+        return Array.isArray(pt) && pt.length === 2 && isFinite(pt[0]) && isFinite(pt[1]);
       });
       if (pts.length === MAP_POINTS) {
-        out.template = { mode: tpl.mode, plateH: tpl.plateH, points: pts };
+        out.template = {
+          mode: tpl.mode,
+          plateH: tpl.plateH,
+          genW: Number.isFinite(tpl.genW) ? tpl.genW : null,
+          genH: Number.isFinite(tpl.genH) ? tpl.genH : null,
+          points: pts,
+        };
       }
     }
+    out.pointer = Number.isInteger(raw.pointer) ? Math.max(0, Math.min(raw.pointer, POOL.length - 1)) : 0;
     return out;
   }
-  function loadState() {
+  function backupBroken(raw, reason) {
+    try { localStorage.setItem(BREAK_PREFIX + Date.now(), reason + '\n' + raw); } catch (e) { /* quota */ }
+  }
+  function readState() {
     try {
-      if (/[?&]fresh=1/.test(location.search)) {
+      if (DEV && /[?&]fresh=1/.test(location.search)) {
         try { localStorage.removeItem(STORE_KEY); } catch (e) {}
-        return freshState();
+        return { state: freshState(), notice: null };
       }
       var raw = localStorage.getItem(STORE_KEY);
-      if (raw) return sanitize(JSON.parse(raw));
-    } catch (e) { /* private mode */ }
-    return freshState();
+      if (!raw) return { state: freshState(), notice: null };
+      var parsed = null;
+      try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+      if (!parsed || typeof parsed !== 'object') {
+        backupBroken(raw, 'parse-failed');
+        return { state: freshState(), notice: '存档无法读取 · 旧数据已另存备份，当前为空档' };
+      }
+      if (parsed.v !== 3) {
+        backupBroken(raw, 'version-' + parsed.v);
+        return { state: freshState(), notice: '存档版本不兼容（v' + parsed.v + '）· 旧数据已另存备份，当前为空档' };
+      }
+      return { state: sanitize(parsed), notice: null };
+    } catch (e) {
+      return { state: freshState(), notice: null };
+    }
   }
+  var loadedState = readState();
+  var state = loadedState.state;
+  var bootNotice = loadedState.notice;
   function saveState() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { toast('本地存储不可用，进度可能丢失'); }
   }
 
-  var state = loadState();
   var ui = {
     selected: null, current: null, currentIndex: -1, cuts: [],
     hover: null, pinned: null, anim: null, flash: null,
     replace: null, splitEdit: null, viewSealed: null,
     drawer: null, train: null, capOpen: false, menuOpen: false,
     pendingImport: null, installPrompt: null,
+    confirmReplace: false, confirmAction: null,
+    drawerQuery: '', drawerScroll: 0, drawerTrigger: null,
+    lastExtinguish: null, mapMetrics: null,
     toastTimer: null, flashTimer: null
   };
 
@@ -872,7 +959,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   var stageEl = $('stage'), mapScroll = $('mapScroll'), mapEl = $('map'), cardEl = $('card');
   var wordRow = $('wordRow'), wordMeta = $('wordMeta'), piecePreview = $('piecePreview');
   var cardHint = $('cardHint'), cardLevel = $('cardLevel');
-  var skipBtn = $('skipBtn'), clearBtn = $('clearBtn'), saveBtn = $('saveBtn');
+  var cancelBtn = $('cancelBtn'), skipBtn = $('skipBtn'), clearBtn = $('clearBtn'), saveBtn = $('saveBtn');
   var dockEl = $('dock'), toastEl = $('toast');
   var annotFill = $('annotFill'), annotCount = $('annotCount'), boxPill = $('boxPill');
   var annotatedBtn = $('annotatedBtn'), boxesBtn = $('boxesBtn'), boxesBadge = $('boxesBadge');
@@ -885,6 +972,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   var importFile = $('importFile');
   var importModal = $('importModal'), importSummary = $('importSummary');
   var importCancel = $('importCancel'), importMergeBtn = $('importMerge'), importReplaceBtn = $('importReplace');
+  var confirmModal = $('confirmModal'), confirmTitle = $('confirmTitle'), confirmBody = $('confirmBody');
+  var confirmCancel = $('confirmCancel'), confirmOk = $('confirmOk');
   var trainView = $('trainView');
   var stageW = 1, stageH = 1;
 
@@ -901,7 +990,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
   function isFull() { return state.entries.length >= state.capacity; }
   function annotatedTotal() {
-    var n = BASE_ANNOTATED + state.entries.length;
+    var n = state.entries.length;
     state.sealed.forEach(function (b) { n += b.entries.length; });
     return n;
   }
@@ -913,6 +1002,29 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     return state.entries;
   }
   function isMobileLayout() { return stageEl.clientWidth <= 760; }
+
+  /* 统一清理临时交互状态：封箱/回看/训练/导入等跨状态操作都要调用，
+     避免 splitEdit / replace / selected 残留到下一个状态（审查报告 #2/#10/#11） */
+  function resetTransientUi() {
+    ui.selected = null;
+    ui.current = null;
+    ui.currentIndex = -1;
+    ui.cuts = [];
+    ui.pinned = null;
+    ui.hover = null;
+    ui.replace = null;
+    ui.splitEdit = null;
+    ui.anim = null;
+  }
+  function closeConfirm() { confirmModal.hidden = true; ui.confirmAction = null; }
+  function openConfirm(opts) {
+    confirmTitle.textContent = opts.title || '确认';
+    confirmBody.textContent = opts.body || '';
+    confirmOk.textContent = opts.ok || '确定';
+    ui.confirmAction = opts.onOk || null;
+    confirmModal.hidden = false;
+    confirmOk.focus();
+  }
 
   /* ---------------------------------------------------------------- template */
   function generateTemplate() {
@@ -973,6 +1085,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     return {
       mode: mode,
       plateH: plateH,
+      genW: W,
+      genH: H,
       points: pts.map(function (pt) {
         return [+(pt[0] / W).toFixed(4), +(pt[1] / plateH).toFixed(4)];
       }),
@@ -983,7 +1097,32 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     if (!state.template || state.template.mode !== mode) {
       state.template = generateTemplate();
       saveState();
+    } else if (!Number.isFinite(state.template.genW) || !Number.isFinite(state.template.genH)) {
+      /* 旧存档没有记录生成尺寸：以当前窗口为准，不重建点位 */
+      state.template.genW = Math.round(stageEl.clientWidth || 900);
+      state.template.genH = Math.round(stageEl.clientHeight || 600);
     }
+  }
+
+  /* 命中半径：按最近邻距离的 45% 约束，避免相邻点命中区重叠（审查报告 #3/#13） */
+  function computeHitRadius(W, H, tpl, scrollMode) {
+    var key = tpl.mode + '|' + W + '|' + H + '|' + tpl.plateH;
+    if (ui.mapMetrics && ui.mapMetrics.key === key) return ui.mapMetrics.hitR;
+    var pts = tpl.points;
+    var HH = scrollMode ? tpl.plateH : H;
+    var minD2 = Infinity;
+    for (var i = 0; i < pts.length; i++) {
+      for (var j = i + 1; j < pts.length; j++) {
+        var dx = (pts[i][0] - pts[j][0]) * W;
+        var dy = (pts[i][1] - pts[j][1]) * HH;
+        var d2 = dx * dx + dy * dy;
+        if (d2 < minD2) minD2 = d2;
+      }
+    }
+    var minD = Math.sqrt(minD2);
+    var hitR = Math.max(8, Math.min(24, minD * 0.45));
+    ui.mapMetrics = { key: key, hitR: hitR, minD: minD };
+    return hitR;
   }
 
   /* ---------------------------------------------------------------- map */
@@ -1026,7 +1165,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var entries = currentViewEntries();
     var lit = {};
     entries.forEach(function (e) { lit[e.p] = e; });
-    var hitR = scrollMode ? 14 : Math.max(8, Math.min(20, Math.sqrt(W * H / MAP_POINTS) * 0.5));
+    var hitR = computeHitRadius(W, H, tpl, scrollMode);
     var pts = '';
     for (var k = 0; k < tpl.points.length; k++) {
       var pt = tpl.points[k];
@@ -1078,7 +1217,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   function idleHint() {
     if (ui.viewSealed != null) return '回看第 ' + ui.viewSealed + ' 箱（只读）';
     if (isFull()) return '<b>本箱已满</b>（' + state.capacity + ' 词）· 按底部「封箱」';
-    if (state.pointer >= POOL.length) return '<b>词池已空</b> · 点「已标注词汇」查看已写入的词';
+    if (!hasUnplacedWord()) return '<b>词池已空</b> · 点「已标注词汇」查看已写入的词';
     if (state.entries.length === 0) return '在图中点一个空位';
     return '继续<b>点空位</b>，为下一个词选位置';
   }
@@ -1120,7 +1259,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       piecePreview.hidden = true; piecePreview.innerHTML = '';
       cardHint.textContent = idleSubhint();
       cardLevel.textContent = '';
-      setBtn(skipBtn, false); setBtn(clearBtn, false); setBtn(saveBtn, false);
+      setBtn(cancelBtn, false); setBtn(skipBtn, false); setBtn(clearBtn, false); setBtn(saveBtn, false);
       saveBtn.textContent = '保存并点亮';
       return;
     }
@@ -1134,16 +1273,19 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     piecePreview.innerHTML = pieces.map(function (p) {
       return '<span class="piece">' + esc(p) + '</span>';
     }).join('<span class="pipe">/</span>') + '<span class="pcount">' + pieces.length + ' 份</span>';
+    var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+    var editSuffix = touch ? '' : ' · Enter 保存 · S 跳过 · Esc 取消';
     if (ui.splitEdit) {
-      cardHint.textContent = '编辑切分 · 保存后更新这条标注';
+      cardHint.textContent = '编辑切分 · 保存后更新这条标注' + (touch ? '' : ' · Esc 取消');
       saveBtn.textContent = '保存切分';
     } else if (ui.replace) {
       cardHint.textContent = '改词：保存后「' + ui.replace.old.w + '」回到词池，新词写入这个点';
       saveBtn.textContent = '保存并替换';
     } else {
-      cardHint.textContent = '点字母之间的空隙下刀 · 最多切 2 刀（3 份） · Enter 保存点亮 · S 跳过';
+      cardHint.textContent = '点字母之间的空隙下刀 · 最多切 2 刀（3 份）' + editSuffix;
       saveBtn.textContent = '保存并点亮';
     }
+    setBtn(cancelBtn, true);
     setBtn(skipBtn, !ui.splitEdit && !ui.replace);
     setBtn(clearBtn, true);
     setBtn(saveBtn, true);
@@ -1183,18 +1325,17 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       secondary = ui.replace
         ? '「' + ui.replace.old.w + '」→「' + ui.current[0] + '」· 保存后替换'
         : (ui.splitEdit ? '正在调整「' + ui.current[0] + '」的切分' : '正在标注「' + ui.current[0] + '」· 保存后点亮这个点');
-    } else if (ui.hover != null) {
-      var he = null;
-      for (var j = 0; j < viewEntries.length; j++) if (viewEntries[j].p === ui.hover) he = viewEntries[j];
-      if (he) { primary = he.w; secondary = '点击固定读数'; tone = 'tone-word'; }
-      else { primary = '空位 · 未写入'; secondary = '点击它，为下一个待标注词选一个位置'; }
     } else if (sealedView) {
       primary = '第 ' + ui.viewSealed + ' 箱 · 已封存';
       secondary = viewEntries.length + ' 词 · 只读回看 · 点已点亮的点读标签';
     } else if (full) {
       primary = '本箱已满';
       secondary = '满 ' + state.capacity + ' 词 · 封箱后新箱复用同一张图';
-      actions = [{ key: 'seal', label: '封箱', kind: 'primary' }];
+    } else if (ui.hover != null) {
+      var he = null;
+      for (var j = 0; j < viewEntries.length; j++) if (viewEntries[j].p === ui.hover) he = viewEntries[j];
+      if (he) { primary = he.w; secondary = '点击固定读数'; tone = 'tone-word'; }
+      else { primary = '空位 · 未写入'; secondary = '点击它，为下一个待标注词选一个位置'; }
     } else if (state.entries.length === 0) {
       primary = '点空位 → 标注 → 点亮';
       secondary = '第 ' + state.boxNo + ' 箱 · 目标 ' + state.capacity + ' 词 · 点位固定';
@@ -1202,12 +1343,19 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       primary = '继续点空位，或点已点亮的星读词';
       secondary = '第 ' + state.boxNo + ' 箱 · 已点亮 ' + state.entries.length + ' / ' + state.capacity;
     }
-    if (!sealedView && !ui.train && !ui.pinned && !ui.current && state.entries.length > 0 && !full) {
-      actions = [{ key: 'seal', label: '封箱' }];
+
+    /* 封箱入口独立于 flash/hover：满箱或已有词时都保留，避免读数条提示把按钮压掉 */
+    if (!sealedView && !ui.current && !ui.pinned && state.entries.length > 0) {
+      actions = [{ key: 'seal', label: '封箱', kind: full ? 'primary' : '' }];
     }
+    if (!sealedView && full && ui.hover != null && !ui.current) {
+      secondary = '满 ' + state.capacity + ' 词 · 先封箱再继续';
+    }
+
     var actionsHtml = actions.map(function (a) {
       return '<button class="btn-mini ' + (a.kind || '') + (a.danger ? ' danger' : '') + '" data-action="' + a.key + '">' + esc(a.label) + '</button>';
     }).join('');
+    dockEl.setAttribute('aria-live', ui.hover != null ? 'off' : 'polite');
     dockEl.innerHTML =
       '<div class="dock-inner">' +
         '<div class="dock-text">' +
@@ -1239,18 +1387,29 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     }
   }
 
+  /* 弹层定位：以锚点 rect.left 计算并夹取在视口内（审查报告 #1） */
+  function placePopover(el, anchor) {
+    el.hidden = false;
+    var r = anchor.getBoundingClientRect();
+    var w = el.offsetWidth || el.getBoundingClientRect().width || 268;
+    var h = el.offsetHeight || 0;
+    var left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
+    var top = r.bottom + 8;
+    if (h && top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 8);
+    el.style.left = Math.round(left) + 'px';
+    el.style.right = 'auto';
+    el.style.top = Math.round(top) + 'px';
+  }
   function renderCapOptions() {
     capOptions.innerHTML = CAP_STEPS.map(function (n) {
       return '<button class="cap-opt' + (n === state.capacity ? ' active' : '') + '" data-cap="' + n + '">' + n + '</button>';
     }).join('');
   }
   function openCapPopover() {
-    if (ui.viewSealed != null) return;
+    if (ui.viewSealed != null) { backToCurrentBox(); }
+    closeMenu();
     renderCapOptions();
-    capPopover.hidden = false;
-    var rect = boxPill.getBoundingClientRect();
-    capPopover.style.top = Math.round(rect.bottom + 8) + 'px';
-    capPopover.style.right = Math.round(Math.max(12, window.innerWidth - rect.right)) + 'px';
+    placePopover(capPopover, boxPill);
     ui.capOpen = true;
   }
   function closeCapPopover() {
@@ -1290,7 +1449,10 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       document.body.appendChild(a);
       a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-      toast('存档已导出 · 可发到另一台设备「合并导入」');
+      var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      toast(standalone
+        ? '已请求下载 · 若没有反应，请用系统分享保存或用浏览器打开'
+        : '存档已导出 · 可发到另一台设备「合并导入」');
       closeMenu();
     } catch (e) {
       toast('导出失败：浏览器不允许下载');
@@ -1311,6 +1473,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
   function openImportModal(parsed) {
     ui.pendingImport = parsed;
+    resetImportReplace();
     var imp = parsed.state;
     importSummary.textContent =
       '存档：' + (parsed.format === 'pointfield' ? '点图存档' : '原始状态') +
@@ -1318,10 +1481,27 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       '导入内容：' + countWords(imp) + ' 词 · ' + imp.sealed.length + ' 个封箱 · 当前箱 ' + imp.entries.length + ' 词\n' +
       '本机现有：' + countWords(state) + ' 词 · ' + state.sealed.length + ' 个封箱 · 当前箱 ' + state.entries.length + ' 词\n\n' +
       '合并导入：只追加本机没有的词，不覆盖现有数据（推荐多设备积累）\n' +
-      '覆盖导入：用存档替换本机全部数据（不可撤销）';
+      '覆盖导入：用存档替换本机全部数据（不可撤销，会先自动备份当前数据）';
     importModal.hidden = false;
   }
-  function closeImportModal() { importModal.hidden = true; ui.pendingImport = null; }
+  function resetImportReplace() {
+    ui.confirmReplace = false;
+    importReplaceBtn.textContent = '覆盖导入';
+    importReplaceBtn.classList.remove('danger');
+  }
+  function closeImportModal() { importModal.hidden = true; ui.pendingImport = null; resetImportReplace(); }
+  function autoBackupState() {
+    try {
+      localStorage.setItem(AUTOBACKUP_PREFIX + Date.now(), JSON.stringify(state));
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(AUTOBACKUP_PREFIX) === 0) keys.push(k);
+      }
+      keys.sort();
+      while (keys.length > 3) { try { localStorage.removeItem(keys.shift()); } catch (e) { break; } }
+    } catch (e) { /* quota / private mode */ }
+  }
   function nextFreePoint(list) {
     var used = {};
     list.forEach(function (e) { used[e.p] = 1; });
@@ -1329,6 +1509,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     return 0;
   }
   function mergeImport(imp) {
+    resetTransientUi();
+    ui.lastExtinguish = null;
     var allWords = {}, added = { current: 0, boxes: 0, words: 0, skipped: 0 };
     state.entries.forEach(function (e) { allWords[e.w] = 1; });
     state.sealed.forEach(function (b) { b.entries.forEach(function (e) { allWords[e.w] = 1; }); });
@@ -1375,6 +1557,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     return added;
   }
   function replaceImport(imp) {
+    resetTransientUi();
+    ui.lastExtinguish = null;
     var savedTemplate = state.template;
     state = sanitize(JSON.parse(JSON.stringify(imp)));
     var mode = isMobileLayout() ? 'scroll' : 'fit';
@@ -1385,22 +1569,21 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   function applyImport(mode) {
     var parsed = ui.pendingImport;
     if (!parsed) return;
-    closeImportModal(); closeMenu();
-    if (mode === 'merge') {
-      var added = mergeImport(parsed.state);
-      toast('合并导入完成：新增 ' + added.words + ' 词 · 新增 ' + added.boxes + ' 个封箱 · 跳过重复 ' + added.skipped + ' 词', 3600);
-    } else {
+    if (mode === 'replace') {
+      autoBackupState();
+      closeImportModal(); closeMenu();
       replaceImport(parsed.state);
-      toast('已覆盖导入 · 共 ' + countWords(state) + ' 词', 2800);
+      toast('已覆盖导入 · 共 ' + countWords(state) + ' 词 · 旧数据已自动备份', 3200);
+      return;
     }
+    closeImportModal(); closeMenu();
+    var added = mergeImport(parsed.state);
+    toast('合并导入完成：新增 ' + added.words + ' 词 · 新增 ' + added.boxes + ' 个封箱 · 跳过重复 ' + added.skipped + ' 词', 3600);
   }
   function openMenu() {
     closeCapPopover();
     renderMenu();
-    menuPopover.hidden = false;
-    var rect = menuBtn.getBoundingClientRect();
-    menuPopover.style.top = Math.round(rect.bottom + 8) + 'px';
-    menuPopover.style.right = Math.round(Math.max(12, window.innerWidth - rect.right)) + 'px';
+    placePopover(menuPopover, menuBtn);
     ui.menuOpen = true;
   }
   function closeMenu() {
@@ -1420,8 +1603,15 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
 
   /* ---------------------------------------------------------------- actions */
+  function hasUnplacedWord() {
+    for (var i = 0; i < POOL.length; i++) if (!isPlaced(POOL[i][0])) return true;
+    return false;
+  }
   function loadNextWord() {
-    for (var i = state.pointer; i < POOL.length; i++) {
+    if (!POOL.length) { ui.current = null; ui.currentIndex = -1; ui.cuts = []; return; }
+    var start = ((state.pointer % POOL.length) + POOL.length) % POOL.length;
+    for (var k = 0; k < POOL.length; k++) {
+      var i = (start + k) % POOL.length;
       if (!isPlaced(POOL[i][0])) {
         ui.current = POOL[i];
         ui.currentIndex = i;
@@ -1435,9 +1625,11 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
 
   function selectPoint(p) {
-    if (ui.viewSealed != null || ui.train || isFull()) return;
+    if (ui.viewSealed != null || ui.train) return;
+    if (isFull()) { toast('本箱已满 · 先封箱再继续'); return; }
     if (entryAt(p)) return;
     if (!ui.current) loadNextWord();
+    if (!ui.current) { toast('词池已空'); return; }
     ui.selected = p;
     ui.pinned = null;
     ui.hover = p;
@@ -1465,24 +1657,27 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   function clearCuts() { if (!ui.current) return; ui.cuts = []; renderCard(); }
   function skipWord() {
     if (!ui.current || ui.splitEdit || ui.replace) return;
-    state.pointer = ui.currentIndex + 1;
+    ui.lastExtinguish = null;
+    state.pointer = (ui.currentIndex + 1) % POOL.length;
     loadNextWord();
     renderAll();
     saveState();
   }
   function cancelSelection() {
-    ui.replace = null; ui.splitEdit = null;
-    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null;
+    resetTransientUi();
     renderAll();
   }
 
   function savePlacement() {
     if (!ui.current) return;
-    var pieces = piecesFromCuts(ui.current[0], ui.cuts);
 
     if (ui.splitEdit) {
-      var se = entryAt(ui.splitEdit.p);
-      if (se) se.pieces = pieces;
+      var se = (!ui.viewSealed) ? entryAt(ui.splitEdit.p) : null;
+      if (!se) {
+        toast('这条切分记录已不存在，操作已取消');
+        resetTransientUi(); renderAll(); return;
+      }
+      se.pieces = piecesFromCuts(se.w, ui.cuts);
       ui.splitEdit = null; ui.current = null; ui.cuts = []; ui.selected = null;
       toast('切分已更新');
       saveState(); renderAll(); return;
@@ -1491,24 +1686,36 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       var oldEntry = ui.replace.old;
       var idx = -1;
       for (var i = 0; i < state.entries.length; i++) if (state.entries[i].p === oldEntry.p) { idx = i; break; }
-      if (idx >= 0) state.entries.splice(idx, 1);
+      if (idx < 0) { toast('要替换的点已不存在，操作已取消'); resetTransientUi(); renderAll(); return; }
+      if (isPlaced(ui.current[0])) { toast('「' + ui.current[0] + '」已经写入过了'); resetTransientUi(); renderAll(); return; }
+      state.entries.splice(idx, 1);
       var oldIdx = poolIndex(oldEntry.w);
-      state.entries.push({ p: oldEntry.p, w: ui.current[0], pieces: pieces, t: Date.now() });
+      state.entries.push({ p: oldEntry.p, w: ui.current[0], pieces: piecesFromCuts(ui.current[0], ui.cuts), t: Date.now() });
       if (oldIdx >= 0) state.pointer = Math.min(state.pointer, oldIdx);
       var newWord = ui.current[0], oldWord = oldEntry.w;
       ui.replace = null; ui.current = null; ui.cuts = []; ui.selected = null; ui.pinned = null; ui.hover = null;
+      ui.lastExtinguish = null;
       ui.anim = oldEntry.p;
       flash(newWord, '已替换「' + oldWord + '」· 旧词回到词池');
       saveState(); renderAll();
       setTimeout(function () { if (ui.anim === oldEntry.p) { ui.anim = null; layoutMap(); } }, 820);
       return;
     }
-    if (ui.selected == null || isFull()) return;
+
+    /* 正常保存：校验选中点、当前词、容量，避免重复词/重复点（审查报告 #4） */
+    if (ui.selected == null) { toast('先选一个空位'); return; }
     var p = ui.selected;
-    state.entries.push({ p: p, w: ui.current[0], pieces: pieces, t: Date.now() });
-    state.pointer = ui.currentIndex + 1;
-    var order = state.entries.length, word = ui.current[0];
+    if (!Number.isInteger(p) || p < 0 || p >= MAP_POINTS) { toast('点位无效，请重新选点'); resetTransientUi(); renderAll(); return; }
+    if (entryAt(p)) { toast('这个点已经有词了，请重新选点'); resetTransientUi(); renderAll(); return; }
+    if (isFull()) { toast('本箱已满 · 先封箱再继续'); return; }
+    var word = ui.current[0];
+    if (isPlaced(word)) { toast('「' + word + '」已经写入过了'); resetTransientUi(); renderAll(); return; }
+    var pieces = piecesFromCuts(word, ui.cuts);
+    state.entries.push({ p: p, w: word, pieces: pieces, t: Date.now() });
+    state.pointer = (ui.currentIndex + 1) % POOL.length;
+    var order = state.entries.length;
     ui.current = null; ui.selected = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    ui.lastExtinguish = null;
     ui.anim = p;
     flash(word, '已点亮 · 第 ' + order + ' 个 · ' + pieces.join(' / ') + '（' + pieces.length + ' 份）');
     saveState(); renderAll();
@@ -1516,11 +1723,20 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   }
 
   function undo() {
+    if (ui.viewSealed != null) { toast('回看中 · 先「返回当前箱」再撤回'); return; }
     if (ui.selected != null || ui.current || ui.replace || ui.splitEdit) { cancelSelection(); return; }
+    if (ui.lastExtinguish) {
+      var le = ui.lastExtinguish;
+      ui.lastExtinguish = null;
+      if (!entryAt(le.entry.p)) state.entries.splice(Math.min(le.index, state.entries.length), 0, le.entry);
+      ui.pinned = null; ui.hover = null;
+      flash(le.entry.w, '已撤回熄灭 · 词回到图上');
+      saveState(); renderAll(); return;
+    }
     if (!state.entries.length) { toast('没有可撤回的放置'); return; }
     var last = state.entries.pop();
     var idx = poolIndex(last.w);
-    if (idx >= 0) state.pointer = Math.min(state.pointer, idx);
+    if (idx >= 0) state.pointer = idx;
     ui.pinned = null; ui.hover = null;
     flash(last.w, '已撤回 · 该点重新变回空位');
     saveState(); renderAll();
@@ -1530,81 +1746,107 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var idx = -1;
     for (var i = 0; i < state.entries.length; i++) if (state.entries[i].p === p) { idx = i; break; }
     if (idx < 0) return;
-    var w = state.entries[idx].w;
+    var entry = state.entries[idx];
+    var w = entry.w;
     state.entries.splice(idx, 1);
     var pi = poolIndex(w);
-    if (pi >= 0) state.pointer = Math.min(state.pointer, pi);
+    if (pi >= 0) state.pointer = pi;
     ui.pinned = null; ui.hover = null;
-    toast('已熄灭「' + w + '」· 该词回到词池');
+    ui.lastExtinguish = { entry: { p: entry.p, w: entry.w, pieces: entry.pieces.slice(), t: entry.t }, index: idx };
+    toast('已熄灭「' + w + '」· Ctrl+Z 可撤回');
     saveState(); renderAll();
   }
 
   function startReplace(p) {
+    if (ui.viewSealed != null) { toast('回看模式下不能改词'); return; }
     var e = entryAt(p);
     if (!e) return;
+    resetTransientUi();
     if (!ui.current) loadNextWord();
     if (!ui.current) { toast('词池已空，暂时没有可替换的词'); return; }
     ui.replace = { p: p, old: { p: e.p, w: e.w, pieces: e.pieces.slice() } };
-    ui.splitEdit = null;
     ui.selected = p;
-    ui.pinned = null;
     renderAll();
     scheduleEnsureVisible();
   }
 
   function startSplitEdit(p) {
+    if (ui.viewSealed != null) { toast('回看模式下不能编辑切分'); return; }
     var e = entryAt(p);
-    if (!e) return;
+    if (!e) { toast('这条记录不存在'); return; }
+    resetTransientUi();
     var word = findWord(e.w) || [e.w, '', '', '', 'cet4', ''];
     ui.splitEdit = { p: p };
-    ui.replace = null;
     ui.selected = p;
     ui.current = word;
     ui.cuts = cutsFromPieces(e.w, e.pieces);
-    ui.pinned = null;
     closeDrawer();
     renderAll();
     scheduleEnsureVisible();
   }
 
-  function sealBox() {
-    if (!state.entries.length) { toast('本箱还是空的'); return; }
-    if (ui.viewSealed != null) return;
+  function performSeal() {
+    if (!state.entries.length) return;
     var boxNo = state.boxNo;
-    state.sealed.push({ boxNo: state.boxNo, capacity: state.capacity, entries: state.entries.slice(), sealedAt: new Date().toISOString() });
+    state.sealed.push({ boxNo: boxNo, capacity: state.capacity, entries: state.entries.slice(), sealedAt: new Date().toISOString() });
     state.boxNo++;
     state.entries = [];
-    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    resetTransientUi();
     flash('第 ' + boxNo + ' 箱已封存', '箱库 +1 · 可在箱库选择这一箱训练');
     saveState(); renderAll();
+  }
+  function sealBox() {
+    if (ui.viewSealed != null) { toast('回看中不能封箱'); return; }
+    if (!state.entries.length) { toast('本箱还是空的'); return; }
+    var full = isFull();
+    openConfirm({
+      title: '封箱',
+      body: '第 ' + state.boxNo + ' 箱 · ' + state.entries.length + ' / ' + state.capacity + ' 词'
+        + (full ? '（已满）' : '（未满，提前封箱）')
+        + '\n封箱后不能再修改，可在箱库回看/训练。确认封箱？',
+      ok: '封箱',
+      onOk: performSeal,
+    });
   }
 
   function openSealed(boxNo) {
     if (!state.sealed.some(function (b) { return b.boxNo === boxNo; })) return;
+    resetTransientUi();
     ui.viewSealed = boxNo;
-    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
     closeDrawer();
     renderAll();
   }
   function backToCurrentBox() {
     ui.viewSealed = null;
-    ui.pinned = null; ui.hover = null;
+    resetTransientUi();
     renderAll();
   }
 
   /* ---------------------------------------------------------------- drawers */
   function openDrawer(kind) {
     ui.drawer = kind;
+    ui.drawerTrigger = kind === 'boxes' ? boxesBtn : annotatedBtn;
     drawerEl.hidden = false;
     scrim.hidden = false;
     drawerEl.setAttribute('aria-hidden', 'false');
     renderDrawer();
+    drawerClose.focus();
   }
   function closeDrawer() {
+    var trigger = ui.drawerTrigger;
     ui.drawer = null;
     drawerEl.hidden = true;
     scrim.hidden = true;
     drawerEl.setAttribute('aria-hidden', 'true');
+    if (trigger && typeof trigger.focus === 'function') { try { trigger.focus(); } catch (e) {} }
+  }
+
+  function filterAnnotRows(q) {
+    var trs = drawerBody.querySelectorAll('#annotTbody tr');
+    q = (q || '').trim().toLowerCase();
+    for (var i = 0; i < trs.length; i++) {
+      trs[i].hidden = !!q && trs[i].getAttribute('data-search').indexOf(q) < 0;
+    }
   }
 
   function allAnnotatedRows() {
@@ -1643,7 +1885,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
               '<td class="ap">' + r.pieces.map(function (p) { return '<span class="piece">' + esc(p) + '</span>'; }).join('<span class="pipe">/</span>') + '</td>' +
               '<td class="an">' + (r.p + 1) + '</td>' +
               '<td class="an">' + (r.sealed ? '第 ' + r.boxNo + ' 箱 🔒' : '第 ' + r.boxNo + ' 箱') + '</td>' +
-              '<td class="at">' + fmtDate(new Date(r.t || 0).toISOString()) + '</td>' +
+              '<td class="at">' + fmtDate(r.t) + '</td>' +
               '<td class="ao">' + (canEdit
                 ? '<button class="link-btn" data-edit="' + r.p + '">编辑切分</button><button class="link-btn del" data-del="' + r.p + '">熄灭</button>'
                 : '<span class="lock">只读</span>') + '</td></tr>';
@@ -1652,11 +1894,19 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       }
       drawerBody.innerHTML = html;
       var search = $('annotSearch');
-      if (search) search.addEventListener('input', function () {
-        var q = this.value.trim().toLowerCase();
-        var trs = drawerBody.querySelectorAll('#annotTbody tr');
-        for (var i = 0; i < trs.length; i++) {
-          trs[i].hidden = q && trs[i].getAttribute('data-search').indexOf(q) < 0;
+      if (search) {
+        search.value = ui.drawerQuery;
+        filterAnnotRows(ui.drawerQuery);
+        search.addEventListener('input', function () {
+          ui.drawerQuery = this.value;
+          filterAnnotRows(ui.drawerQuery);
+        });
+      }
+      /* 重渲染后恢复滚动位置（审查报告 #14） */
+      requestAnimationFrame(function () {
+        if (ui.drawer === 'annotated') {
+          drawerBody.scrollTop = Math.max(0, ui.drawerScroll || 0);
+          if (search && ui.drawerQuery) filterAnnotRows(ui.drawerQuery);
         }
       });
     } else if (ui.drawer === 'boxes') {
@@ -1689,7 +1939,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     rows.forEach(function (r) {
       var w = findWord(r.w);
       lines.push([r.w, w ? w[4] : '', w ? w[5] : '', r.pieces.length, r.pieces.join('|'), r.boxNo, r.p + 1,
-        new Date(r.t || Date.now()).toISOString()].map(cell).join(','));
+        safeIso(r.t)].map(cell).join(','));
     });
     var blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
@@ -1721,14 +1971,15 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
       return { entry: e, word: w, correct: correct, options: opts, answer: opts.indexOf(correct) };
     });
     ui.train = { boxNo: boxNo, qs: qs, idx: 0, correct: 0, answered: false };
-    ui.viewSealed = null;
-    ui.selected = null; ui.current = null; ui.cuts = []; ui.pinned = null;
+    resetTransientUi();
     trainView.hidden = false;
     renderTrain();
+    $('trainQuit').focus();
   }
   function endTrainingUi() {
     ui.train = null;
     trainView.hidden = true;
+    resetTransientUi();
     renderAll();
   }
   function renderTrain() {
@@ -1737,7 +1988,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var q = t.qs[t.idx];
     $('trainBoxLabel').textContent = '第 ' + t.boxNo + ' 箱';
     $('trainCount').textContent = (t.idx + 1) + ' / ' + t.qs.length;
-    $('trainFill').style.width = ((t.idx) / t.qs.length * 100) + '%';
+    $('trainFill').style.width = (((t.idx + 1) / t.qs.length) * 100) + '%';
     $('trainCard').hidden = false;
     $('trainEnd').hidden = true;
     $('trainFeedback').hidden = true;
@@ -1780,7 +2031,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var t = ui.train;
     if (!t) return;
     var score = t.correct, total = t.qs.length;
-    var stars = score / total >= 0.9 ? 3 : (score / total >= 0.7 ? 2 : 1);
+    var ratio = total ? score / total : 1;
+    var stars = ratio >= 0.9 ? 3 : (ratio >= 0.7 ? 2 : (ratio >= 0.4 ? 1 : 0));
     $('trainCard').hidden = true;
     $('trainFeedback').hidden = true;
     $('trainEnd').hidden = false;
@@ -1826,7 +2078,8 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var p = Number(g.dataset.i);
     var occupied = currentViewEntries().some(function (e) { return e.p === p; });
     if (occupied) { pinPoint(p); return; }
-    if (ui.viewSealed != null || ui.train || isFull()) return;
+    if (ui.viewSealed != null || ui.train) return;
+    if (isFull()) { toast('本箱已满 · 先封箱再继续'); return; }
     selectPoint(p);
   });
 
@@ -1834,6 +2087,7 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
     var cut = event.target && event.target.closest ? event.target.closest('.cut') : null;
     if (cut) toggleCut(Number(cut.dataset.c));
   });
+  cancelBtn.addEventListener('click', cancelSelection);
   skipBtn.addEventListener('click', skipWord);
   clearBtn.addEventListener('click', clearCuts);
   saveBtn.addEventListener('click', savePlacement);
@@ -1879,8 +2133,45 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   });
   importCancel.addEventListener('click', closeImportModal);
   importMergeBtn.addEventListener('click', function () { applyImport('merge'); });
-  importReplaceBtn.addEventListener('click', function () { applyImport('replace'); });
+  importReplaceBtn.addEventListener('click', function () {
+    if (!ui.confirmReplace) {
+      ui.confirmReplace = true;
+      importSummary.textContent = '再次确认：覆盖导入会用存档替换本机全部数据。\n当前数据会先自动备份到本机浏览器（pointfield.autobackup.*），但仍建议先「导出存档」。\n\n确定覆盖？';
+      importReplaceBtn.textContent = '确认覆盖';
+      importReplaceBtn.classList.add('danger');
+      return;
+    }
+    applyImport('replace');
+  });
   importModal.addEventListener('click', function (event) { if (event.target === importModal) closeImportModal(); });
+
+  confirmCancel.addEventListener('click', closeConfirm);
+  confirmOk.addEventListener('click', function () {
+    var fn = ui.confirmAction;
+    closeConfirm();
+    if (typeof fn === 'function') fn();
+  });
+  confirmModal.addEventListener('click', function (event) { if (event.target === confirmModal) closeConfirm(); });
+  drawerBody.addEventListener('scroll', function () {
+    if (ui.drawer === 'annotated') ui.drawerScroll = drawerBody.scrollTop;
+  });
+  /* 多标签页同步：另一个窗口写入存档时，本窗口刷新为最新（审查报告 #16）
+     点位是设备/窗口本地的：同步时保留本窗口模板，避免不同窗口尺寸互相覆盖 */
+  window.addEventListener('storage', function (event) {
+    if (event.key !== STORE_KEY || event.newValue == null) return;
+    try {
+      var parsed = JSON.parse(event.newValue);
+      if (!parsed || parsed.v !== 3) return;
+      var keepTemplate = state.template;
+      var keepMode = isMobileLayout() ? 'scroll' : 'fit';
+      resetTransientUi();
+      state = sanitize(parsed);
+      if (keepTemplate && keepTemplate.mode === keepMode) state.template = keepTemplate;
+      else if (!state.template || state.template.mode !== keepMode) state.template = generateTemplate();
+      renderAll();
+      toast('另一个标签页更新了存档 · 已同步');
+    } catch (e) { /* ignore */ }
+  });
   installBtn.addEventListener('click', function () {
     var prompt = ui.installPrompt;
     closeMenu();
@@ -1931,39 +2222,68 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   });
 
   document.addEventListener('keydown', function (event) {
+    var t = event.target;
+    var tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+    /* 输入框 / 可编辑区域里不劫持快捷键（审查报告 #7） */
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (t && t.isContentEditable)) return;
+
     if (ui.train) {
       if (/^[1-4]$/.test(event.key) && !$('trainCard').hidden) answerTrain(Number(event.key) - 1);
       else if (event.key === 'Enter' && !$('trainFeedback').hidden) nextTrain();
       else if (event.key === 'Escape') endTrainingUi();
       return;
     }
-    if (event.key === 'Enter' && ui.current) { event.preventDefault(); savePlacement(); return; }
-    if ((event.key === 's' || event.key === 'S') && ui.current && !event.ctrlKey && !event.metaKey) { skipWord(); return; }
     if (event.key === 'Escape') {
+      if (!confirmModal.hidden) { closeConfirm(); return; }
       if (!importModal.hidden) { closeImportModal(); return; }
       if (ui.menuOpen) { closeMenu(); return; }
       if (ui.capOpen) { closeCapPopover(); return; }
       if (ui.drawer) { closeDrawer(); return; }
       if (ui.pinned != null) { ui.pinned = null; renderDock(); layoutMap(); return; }
+      if (ui.viewSealed != null) { backToCurrentBox(); return; }
       if (ui.current || ui.selected != null || ui.replace || ui.splitEdit) { cancelSelection(); return; }
       return;
     }
+    if (tag === 'button' || tag === 'a') {
+      /* 不抢焦点按钮的 Enter 激活；Ctrl+Z 仍可用于撤回 */
+      if (!((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z'))) return;
+    }
+    if (event.key === 'Enter' && ui.current) { event.preventDefault(); savePlacement(); return; }
+    if ((event.key === 's' || event.key === 'S') && ui.current && !event.ctrlKey && !event.metaKey) { skipWord(); return; }
     if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
       event.preventDefault();
       undo();
     }
   });
 
-  var resizeQueued = false;
+  var resizeTimer = null;
+  function needsTemplateRebuild() {
+    if (!state.template) return true;
+    var mode = isMobileLayout() ? 'scroll' : 'fit';
+    if (state.template.mode !== mode) return true;
+    var W = Math.round(stageEl.clientWidth || 0);
+    var H = Math.round(stageEl.clientHeight || 0);
+    if (!Number.isFinite(state.template.genW) || !Number.isFinite(state.template.genH)) return true;
+    if (Math.abs(W - state.template.genW) > 24 || Math.abs(H - state.template.genH) > 24) return true;
+    if (mode === 'scroll' && Math.abs(Math.max(H, Math.round(W * 3.2)) - state.template.plateH) > 24) return true;
+    return false;
+  }
   function onResize() {
-    if (resizeQueued) return;
-    resizeQueued = true;
-    requestAnimationFrame(function () {
-      resizeQueued = false;
-      var mode = isMobileLayout() ? 'scroll' : 'fit';
-      if (!state.template || state.template.mode !== mode) renderAll();
-      else layoutMap();
-    });
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      resizeTimer = null;
+      if (needsTemplateRebuild()) {
+        /* 同一模式内窗口尺寸变化也要重算安全区/间距（审查报告 #3） */
+        resetTransientUi();
+        state.template = generateTemplate();
+        saveState();
+        renderAll();
+      } else {
+        layoutMap();
+        if (ui.capOpen) placePopover(capPopover, boxPill);
+        if (ui.menuOpen) placePopover(menuPopover, menuBtn);
+      }
+    }, 180);
   }
   window.addEventListener('resize', onResize);
   if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
@@ -1971,63 +2291,11 @@ window.WORD_POOL = [["budget","ˈbʌdʒit","n/vi/vt/a","预算","cet4","1054"],[
   /* ---------------------------------------------------------------- init */
   function init() {
     renderAll();
+    if (bootNotice) setTimeout(function () { toast(bootNotice, 6000); }, 350);
     window.__PROTO_READY = true;
   }
   init();
 
-  /* 调试 / 截图接口 */
-  window.__proto = {
-    get state() { return state; },
-    ui: ui,
-    selectPoint: selectPoint,
-    savePlacement: savePlacement,
-    skipWord: skipWord,
-    toggleCut: toggleCut,
-    sealBox: sealBox,
-    undo: undo,
-    entryAt: entryAt,
-    openDrawer: openDrawer,
-    startTraining: startTraining,
-    setCapacity: setCapacity,
-    exportJson: function () { return exportJsonString(); },
-    importJson: function (text, mode) {
-      var parsed = parseBackup(typeof text === 'string' ? text : JSON.stringify(text));
-      if (!parsed) return null;
-      if (mode === 'replace') { replaceImport(parsed.state); return { mode: 'replace', words: countWords(state) }; }
-      return mergeImport(parsed.state);
-    },
-    backupSummary: function () { return { words: countWords(state), sealed: state.sealed.length, entries: state.entries.length }; },
-    demoFill: function (n) {
-      for (var k = 0; k < n; k++) {
-        if (state.entries.length >= state.capacity) break;
-        if (!ui.current) loadNextWord();
-        if (!ui.current) break;
-        var free = -1, used = {};
-        state.entries.forEach(function (e) { used[e.p] = 1; });
-        for (var i = 0; i < MAP_POINTS; i++) { if (!used[i]) { free = i; break; } }
-        if (free < 0) break;
-        var w = ui.current[0];
-        var pieces = [w];
-        if (w.length >= 5 && Math.random() < 0.75) {
-          var cut = Math.floor(w.length / 2) + (Math.random() < 0.5 ? 0 : 1);
-          if (cut > 0 && cut < w.length) pieces = [w.slice(0, cut), w.slice(cut)];
-        }
-        state.entries.push({ p: free, w: w, pieces: pieces, t: Date.now() });
-        state.pointer = ui.currentIndex + 1;
-        ui.current = null;
-      }
-      ui.selected = null; ui.cuts = []; ui.pinned = null; ui.hover = null; ui.flash = null;
-      saveState(); renderAll();
-    },
-    pointIndexAwayFromCard: function () {
-      var W = stageW, H = stageH;
-      for (var i = 0; i < state.template.points.length; i++) {
-        var x = state.template.points[i][0] * W, y = state.template.points[i][1] * H;
-        if (x < W * 0.26 && y > H * 0.3 && y < H * 0.7) return i;
-      }
-      return 0;
-    },
-  };
 })();
 
 </script>
