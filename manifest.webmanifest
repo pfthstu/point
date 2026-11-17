@@ -1,7 +1,7 @@
 {
   "name": "点图 · 标注记忆",
   "short_name": "点图",
-  "description": "选点 → 标注 → 点亮；封箱后可按箱训练。",
+  "description": "选点 → 标注 → 点亮；封箱后按箱训练（四题型 + 间隔重复）。",
   "lang": "zh-CN",
   "start_url": "./index.html",
   "scope": "./",
