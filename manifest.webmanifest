@@ -1,13 +1,20 @@
 {
+  "id": "./index.html",
   "name": "点图 · 标注记忆",
   "short_name": "点图",
   "description": "选点 → 标注 → 点亮；封箱后按箱训练（四题型 + 间隔重复）。",
   "lang": "zh-CN",
+  "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#070b13",
   "theme_color": "#080d1a",
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "icon-192.png",
