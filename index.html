@@ -33,7 +33,7 @@
 }
 *,*::before,*::after{ box-sizing:border-box; }
 [hidden]{ display:none !important; }
-html,body{ height:100%; }
+html,body{ height:100%; overflow-x:clip; }
 body{
   margin:0; overflow:hidden;
   background:
@@ -54,12 +54,14 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 
 .app{
   position:relative; z-index:2;
-  height:100dvh;
+  height:100dvh; min-width:0;
   max-width:1500px; margin:0 auto;
   display:grid;
   grid-template-rows:auto minmax(0,1fr) auto;
   padding:0 clamp(12px, 2.4vw, 30px);
 }
+/* 布局不变量：grid/flex 子项都能收缩，任何长文本都不可能把页面撑宽 */
+.app > *{ min-width:0; }
 
 /* ---------------------------------------------------------------- topbar */
 .topbar{
@@ -274,13 +276,20 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
 .btn-card.primary:hover:not(:disabled){ filter:brightness(1.06); }
 .btn-card:disabled{ opacity:.32; cursor:default; box-shadow:none; }
 .btn-card:active:not(:disabled){ transform:scale(.985); }
+.btn-card.danger{
+  color:rgba(255,204,196,.96); border:1px solid rgba(194,104,90,.42); background:rgba(194,104,90,.10);
+}
+.btn-card.danger:hover{ background:rgba(194,104,90,.18); }
+/* 已点亮的星：卡片是操作面（改词/编辑切分/熄灭/封箱） */
+.annot-card[data-state="peek"]{ border-color:rgba(217,188,125,.30); }
+#cardActionsAlt .btn-card{ flex:1 1 auto; }
 
-/* ---------------------------------------------------------------- dock (pointprint 读数条) */
-.dock{ display:flex; justify-content:center; padding:2px 0 calc(14px + env(safe-area-inset-bottom,0px)); }
+/* ---------------------------------------------------------------- dock (只读词锚点)
+   固定几何：只显示一个词 + 一行元信息，没有按钮、没有 flash；长词缩字号，绝不撑宽页面。 */
+.dock{ display:flex; justify-content:center; min-width:0; padding:2px 0 calc(14px + env(safe-area-inset-bottom,0px)); }
 .dock-inner{
-  /* 固定高度：读数条里出现大号词条 / 操作按钮时 stage 高度不变，不再触发整图重排（M1-06） */
-  width:min(700px,100%); height:84px;
-  display:flex; align-items:center; gap:20px;
+  width:min(700px,100%); min-width:0; height:84px;
+  display:flex; align-items:center;
   padding:12px 20px;
   border-radius:18px;
   border:1px solid rgba(217,188,125,.15);
@@ -288,22 +297,20 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   box-shadow:0 20px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.035);
   backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
 }
-.dock-text{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:5px; }
+.dock-text{ flex:1; min-width:0; overflow:hidden; display:flex; flex-direction:column; justify-content:center; gap:5px; }
 .dock-primary{
-  font-size:13.5px; line-height:1.3; letter-spacing:.04em; color:var(--sub);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:20px;
+  font-family:var(--serif); font-size:clamp(20px,2.6vw,26px); line-height:34px; height:34px;
+  letter-spacing:.01em; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;
 }
-.dock-primary.tone-word{
-  font-family:var(--serif); font-size:clamp(22px,2.6vw,30px);
-  line-height:34px; letter-spacing:.01em; color:var(--ink); height:34px;
+.dock-primary.quiet{
+  font-family:var(--sans); font-size:13px; line-height:20px; height:20px;
+  color:var(--sub); letter-spacing:.04em;
 }
-.dock-primary.tone-flash{ color:var(--gold-bright); }
 .dock-secondary{
   font-size:11px; letter-spacing:.06em; line-height:1.4; color:var(--mute);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:15px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:15px; min-width:0;
 }
-.dock-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; height:34px; }
-.dock-actions:empty{ display:none; }
 .btn-mini{
   appearance:none; display:inline-flex; align-items:center; justify-content:center;
   border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--sub);
@@ -344,10 +351,10 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   .annot-card{ width:88vw; padding:13px 14px 12px; }
   .card-body{ min-height:140px; }
   .word-row{ min-height:50px; margin-top:8px; }
-  .dock-inner{ height:74px; padding:10px 14px; gap:12px; }
-  .dock-primary.tone-word{ font-size:22px; line-height:28px; height:28px; }
+  .dock-inner{ height:74px; padding:10px 14px; }
+  .dock-primary{ font-size:20px; line-height:28px; height:28px; }
+  .dock-primary.quiet{ font-size:12px; line-height:18px; height:18px; }
   .dock-text{ gap:4px; }
-  .dock-actions{ height:30px; }
   .btn{ padding:8px 11px; font-size:11.5px; }
   .box-pill{ display:inline-block; padding:6px 9px; font-size:11px; letter-spacing:.02em; }
 }
@@ -358,7 +365,7 @@ button:focus-visible{ outline:1px solid rgba(243,228,190,.7); outline-offset:2px
   .piece-preview{ min-height:34px; margin-top:6px; }
   .card-hint{ display:none; }
   .dock-inner{ height:72px; padding:10px 14px; }
-  .dock-primary.tone-word{ font-size:20px; line-height:24px; height:24px; }
+  .dock-primary{ font-size:18px; line-height:24px; height:24px; }
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{
@@ -674,8 +681,25 @@ kbd{ font-family:inherit; font-size:10px; padding:1px 5px; border-radius:5px; ba
 }
 
 /* =========================================================================
-   M1 维护批：读屏专用区 / 存储告警 / 更新提示
+   M1.2：toast 动作、标注起点输入、卡片/底栏新几何
    ========================================================================= */
+.toast.has-action{ pointer-events:auto; display:flex; align-items:center; gap:10px; }
+.toast-text{ white-space:pre-line; }
+.toast-action{
+  appearance:none; flex:0 0 auto; cursor:pointer;
+  border:1px solid rgba(94,234,212,.45); background:rgba(94,234,212,.14);
+  color:#b8fff4; font-family:inherit; font-size:12px; font-weight:600;
+  padding:5px 11px; border-radius:999px; line-height:1;
+}
+.set-inline{ display:flex; align-items:center; gap:8px; min-width:0; flex:0 1 auto; }
+.set-inline input{
+  width:118px; min-width:0; appearance:none;
+  background:rgba(0,0,0,.28); border:1px solid rgba(148,163,204,.22); color:#e6ebff;
+  border-radius:10px; padding:9px 10px; font-family:inherit; font-size:16px; outline:none;
+}
+.set-inline input:focus{ border-color:rgba(94,234,212,.5); box-shadow:0 0 0 3px rgba(94,234,212,.08); }
+#startPointInfo{ word-break:break-all; }
+
 .sr-only{
   position:absolute; width:1px; height:1px; margin:-1px; padding:0;
   overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0;
@@ -730,7 +754,7 @@ kbd{ font-family:inherit; font-size:10px; padding:1px 5px; border-radius:5px; ba
 
     <section class="annot-card" id="card" data-state="idle" aria-label="拆分标注">
       <div class="card-head">
-        <span class="chip">拆分标注 · 1~3 份</span>
+        <span class="chip" id="cardChip">拆分标注 · 1~3 份</span>
         <span class="level" id="cardLevel">CET4</span>
       </div>
       <div class="card-body">
@@ -739,12 +763,13 @@ kbd{ font-family:inherit; font-size:10px; padding:1px 5px; border-radius:5px; ba
         <div class="piece-preview" id="piecePreview"></div>
         <p class="card-hint" id="cardHint">在图中点一个空位</p>
       </div>
-      <div class="card-actions">
+      <div class="card-actions" id="cardActionsDraft">
         <button class="btn-card ghost" id="cancelBtn" disabled>取消</button>
         <button class="btn-card ghost" id="skipBtn" disabled>跳过</button>
         <button class="btn-card ghost" id="clearBtn" disabled>清空切分</button>
         <button class="btn-card primary" id="saveBtn" disabled>保存并点亮</button>
       </div>
+      <div class="card-actions" id="cardActionsAlt" hidden></div>
     </section>
 
     <div class="viewbar" id="viewbar" hidden>
@@ -1773,7 +1798,7 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
 
   var ui = {
     selected: null, current: null, currentIndex: -1, cuts: [],
-    hover: null, pinned: null, anim: null, flash: null,
+    pinned: null, anim: null, anchor: null,
     replace: null, splitEdit: null, viewSealed: null, lastReplace: null,
     drawer: null, train: null, trainDevMode: null,
     capOpen: false, menuOpen: false,
@@ -1781,13 +1806,14 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     confirmReplace: false, confirmAction: null, confirmOpener: null,
     drawerQuery: '', drawerScroll: 0, drawerTrigger: null, drawerRows: null,
     lastExtinguish: null, mapMetrics: null, storageEstimate: null, announcedWord: null,
-    toastTimer: null, flashTimer: null, updateReady: false
+    announcedTarget: null, toastTimer: null, updateReady: false
   };
 
   /* ---------------------------------------------------------------- dom */
   var stageEl = $('stage'), mapScroll = $('mapScroll'), mapEl = $('map'), cardEl = $('card');
   var wordRow = $('wordRow'), wordMeta = $('wordMeta'), piecePreview = $('piecePreview');
-  var cardHint = $('cardHint'), cardLevel = $('cardLevel');
+  var cardHint = $('cardHint'), cardLevel = $('cardLevel'), cardChip = $('cardChip');
+  var cardActionsDraft = $('cardActionsDraft'), cardActionsAlt = $('cardActionsAlt');
   var cancelBtn = $('cancelBtn'), skipBtn = $('skipBtn'), clearBtn = $('clearBtn'), saveBtn = $('saveBtn');
   var dockEl = $('dock'), toastEl = $('toast');
   var annotFill = $('annotFill'), annotCount = $('annotCount'), boxPill = $('boxPill');
@@ -1856,6 +1882,48 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   }
   function isMobileLayout() { return stageEl.clientWidth <= 760; }
 
+  /* ---------------------------------------------------------------- 标注起点
+     取词指针是「下一个待标注词」的起点；用户可以随时把它改到任意序号/单词。 */
+  function scopeName() {
+    var s = state.settings && state.settings.scope;
+    return s === 'cet4' ? '四级 6127' : s === 'cet6' ? '六级新增 1711' : '全部 7838';
+  }
+  function startPointLabel() {
+    if (!POOL.length) return '当前词库为空';
+    var idx = ((state.pointer % POOL.length) + POOL.length) % POOL.length;
+    return '当前：第 ' + (idx + 1) + ' 词 · ' + POOL[idx][0];
+  }
+  function setAnnotationStart(raw) {
+    var v = String(raw == null ? '' : raw).trim();
+    if (!v) { toast('输入单词或序号，例如 abandon 或 1200'); return false; }
+    var idx = -1, w = '';
+    if (/^\d+$/.test(v)) {
+      var n = Number(v) - 1;
+      if (n >= 0 && n < POOL.length) { idx = n; w = POOL[n][0]; }
+    } else {
+      var low = v.toLowerCase();
+      for (var i = 0; i < POOL.length; i++) {
+        if (POOL[i][0].toLowerCase() === low) { idx = i; w = POOL[i][0]; break; }
+      }
+      if (idx < 0 && CTX.byWord[low]) {
+        toast('「' + CTX.byWord[low].w + '」不在当前词库范围（' + scopeName() + '），先切换范围或换一个词', 3600);
+        return false;
+      }
+    }
+    if (idx < 0) { toast('没找到「' + v + '」（序号 1–' + POOL.length + ' 或词库里的单词）', 3200); return false; }
+    state.pointer = idx;
+    resetTransientUi();
+    saveState();
+    renderAll();
+    /* 只更新设置里的“当前起点”，不重渲染抽屉：避免输入框被清空/失焦 */
+    var info = $('startPointInfo');
+    if (info) info.textContent = startPointLabel();
+    var input = $('setStart');
+    if (input) input.value = '';
+    toast('标注起点：第 ' + (idx + 1) + ' 词 · ' + w, 3000);
+    return true;
+  }
+
   /* 统一清理临时交互状态：封箱/回看/训练/导入等跨状态操作都要调用，
      避免 splitEdit / replace / selected 残留到下一个状态（审查报告 #2/#10/#11） */
   function resetTransientUi() {
@@ -1864,11 +1932,11 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     ui.currentIndex = -1;
     ui.cuts = [];
     ui.pinned = null;
-    ui.hover = null;
     ui.replace = null;
     ui.splitEdit = null;
     ui.anim = null;
     ui.announcedWord = null;
+    ui.announcedTarget = null;
   }
   function closeConfirm() {
     confirmModal.hidden = true;
@@ -1920,20 +1988,6 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     }
   }
   function topLayer() { return layerStack.length ? layerStack[layerStack.length - 1].root : null; }
-  function trapTab(event) {
-    var layer = topLayer();
-    if (!layer) return false;
-    var list = focusables(layer);
-    if (!list.length) return false;
-    var first = list[0], last = list[list.length - 1], active = document.activeElement;
-    if (event.shiftKey && (active === first || !layer.contains(active))) {
-      event.preventDefault(); last.focus(); return true;
-    }
-    if (!event.shiftKey && (active === last || !layer.contains(active))) {
-      event.preventDefault(); first.focus(); return true;
-    }
-    return false;
-  }
   function trapTab(event) {
     var layer = topLayer();
     if (!layer) return false;
@@ -2022,15 +2076,24 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       }),
     };
   }
+  /* 点位只生成一次：之后只更新“映射尺寸”，绝不重新随机。
+     地图是记忆锚点，窗口大小/内容长短都不允许让已点亮的词换位置。 */
   function ensureTemplate() {
     var mode = isMobileLayout() ? 'scroll' : 'fit';
-    if (!state.template || state.template.mode !== mode) {
+    var W = Math.max(200, Math.round(stageEl.clientWidth || 900));
+    var H = Math.max(200, Math.round(stageEl.clientHeight || 600));
+    var plateH = mode === 'scroll' ? Math.max(H, Math.round(W * 3.2)) : H;
+    if (!state.template || !Array.isArray(state.template.points) || state.template.points.length !== MAP_POINTS) {
       state.template = generateTemplate();
       saveState();
-    } else if (!Number.isFinite(state.template.genW) || !Number.isFinite(state.template.genH)) {
-      /* 旧存档没有记录生成尺寸：以当前窗口为准，不重建点位 */
-      state.template.genW = Math.round(stageEl.clientWidth || 900);
-      state.template.genH = Math.round(stageEl.clientHeight || 600);
+      return;
+    }
+    if (state.template.mode !== mode || Math.abs(state.template.plateH - plateH) > 0.5) {
+      state.template.mode = mode;
+      state.template.plateH = plateH;
+      state.template.genW = W;
+      state.template.genH = H;
+      saveState();
     }
   }
 
@@ -2143,25 +2206,52 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     }
   }
 
-  /* ---------------------------------------------------------------- card */
-  /* 回看态卡片是隐藏的，这里只保留当前箱的分支（M1-45：删掉永远执行不到的回看分支） */
+  /* ---------------------------------------------------------------- card
+     卡片是唯一的操作面（底栏只做「词锚点」，见 renderDock）：
+       - 选中空位 → 草稿：词 / 刀口 / 保存
+       - 点了一颗已点亮的星（且没有草稿）→ 该星的操作卡：词 / 拆分 / 改词 / 编辑切分 / 熄灭 / 封箱
+       - 什么都没选 → 空卡：提示 + 封箱
+     有草稿时点星只更新底栏锚点，卡片保持草稿（不再强制取消）。 */
+  function isTouchUi() {
+    try {
+      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+    } catch (e) { /* ignore */ }
+    return (navigator.maxTouchPoints || 0) > 0;
+  }
+  /* 回看态卡片是隐藏的，这里只保留当前箱的分支 */
   function idleHint() {
-    if (isFull()) return '<b>本箱已满</b>（' + state.capacity + ' 词）· 按底部「封箱」';
+    if (isFull()) return '<b>本箱已满</b>（' + state.capacity + ' 词）· 点「封箱」';
     if (!hasUnplacedWord()) return '<b>词池已空</b> · 点「已标注词汇」查看已写入的词';
     if (state.entries.length === 0) return '在图中点一个空位';
     return '继续<b>点空位</b>，为下一个词选位置';
   }
   function idleSubhint() {
     if (isFull()) return '满 ' + state.capacity + ' 词 · 封箱后新箱复用同一张图';
+    if (state.entries.length) return '点已点亮的星查看 / 修改 · 或继续为下一个词选位置';
     return '选点后这里会刷新一个待标注的词 · 标注完成即点亮该点';
   }
-  /* 字号按卡片实际内宽与刀口宽度算：长词允许缩到 10px，配合可横向滚动保证首端可达（M1-22） */
+  /* 字号按卡片实际内宽与刀口宽度算；下限 12px，放不下时横向滚动并保证首端可达（M1-22） */
   function fitFont(len) {
     var cardW = cardEl.clientWidth || Math.min(460, Math.max(200, stageEl.clientWidth * 0.86));
     var avail = Math.max(120, cardW - 36);
     var cutW = 14;
     var size = Math.floor((avail - Math.max(0, len - 1) * cutW) / Math.max(1, len * 0.62));
-    return Math.max(10, Math.min(42, size));
+    return Math.max(12, Math.min(42, size));
+  }
+  /* 已点亮的星：卡片里没有刀口按钮，不需要为切分留宽度，长词也能保持可读 */
+  function fitFontPeek(len) {
+    var cardW = cardEl.clientWidth || Math.min(460, Math.max(200, stageEl.clientWidth * 0.86));
+    var avail = Math.max(120, cardW - 36);
+    var size = Math.floor(avail / Math.max(1, len * 0.62));
+    return Math.max(14, Math.min(38, size));
+  }
+  function wordCharsHtml(word) {
+    var html = '';
+    for (var i = 0; i < word.length; i++) {
+      var ch = word.charAt(i);
+      html += ch === ' ' ? '<span class="ch space">&#9251;</span>' : '<span class="ch">' + esc(ch) + '</span>';
+    }
+    return '<span class="word-line">' + html + '</span>';
   }
   function wordRowHtml(word, cuts) {
     var w = word[0], html = '';
@@ -2176,34 +2266,44 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     }
     return '<span class="word-line">' + html + '</span>';
   }
+  function piecesHtml(pieces) {
+    return pieces.map(function (p) { return '<span class="piece">' + esc(p) + '</span>'; }).join('<span class="pipe">/</span>') +
+      '<span class="pcount">' + pieces.length + ' 份</span>';
+  }
+  function setCardMode(mode) {
+    cardActionsDraft.hidden = mode !== 'draft';
+    cardActionsAlt.hidden = mode === 'draft';
+    cardActionsAlt.innerHTML = '';
+  }
+  function altActionsHtml(actions) {
+    return actions.map(function (a) {
+      return '<button class="btn-card ' + (a.kind || 'ghost') + (a.danger ? ' danger' : '') + '" data-action="' + a.key + '">' + esc(a.label) + '</button>';
+    }).join('');
+  }
+  /* 卡片只看「你点的那颗星」，不看底栏锚点：保存后卡片回到空态，锚点留在底栏（留空设计） */
+  function cardTargetEntry() {
+    return ui.pinned != null ? entryAt(ui.pinned) : null;
+  }
   function renderCard() {
     var sealedView = ui.viewSealed != null;
     cardEl.hidden = sealedView || !!ui.train;
     if (cardEl.hidden) return;
+    if (ui.current) { renderDraftCard(); return; }
+    renderIdleCard();
+  }
+  function renderDraftCard() {
     var word = ui.current;
-    if (!word) {
-      cardEl.dataset.state = 'idle';
-      wordRow.style.fontSize = '';
-      wordRow.innerHTML = '<span class="idle-hint">' + idleHint() + '</span>';
-      wordMeta.hidden = true; wordMeta.textContent = '';
-      piecePreview.hidden = true; piecePreview.innerHTML = '';
-      cardHint.textContent = idleSubhint();
-      cardLevel.textContent = '';
-      setBtn(cancelBtn, false); setBtn(skipBtn, false); setBtn(clearBtn, false); setBtn(saveBtn, false);
-      saveBtn.textContent = '保存并点亮';
-      return;
-    }
     cardEl.dataset.state = 'annotating';
+    setCardMode('draft');
+    cardChip.textContent = ui.replace ? '改词' : (ui.splitEdit ? '编辑切分' : '拆分标注 · 1~3 份');
     wordMeta.hidden = false; piecePreview.hidden = false;
     cardLevel.textContent = word[4] === 'cet6' ? 'CET6 新增' : 'CET4';
     wordRow.style.fontSize = fitFont(word[0].length) + 'px';
     wordRow.innerHTML = wordRowHtml(word, ui.cuts);
     wordMeta.textContent = (word[1] ? '/' + word[1] + '/ · ' : '') + posLabel(word[2]) + ' · ' + word[3];
     var pieces = piecesFromCuts(word[0], ui.cuts);
-    piecePreview.innerHTML = pieces.map(function (p) {
-      return '<span class="piece">' + esc(p) + '</span>';
-    }).join('<span class="pipe">/</span>') + '<span class="pcount">' + pieces.length + ' 份</span>';
-    var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+    piecePreview.innerHTML = piecesHtml(pieces);
+    var touch = isTouchUi();
     var editSuffix = touch ? '' : ' · Enter 保存 · S 跳过 · Esc 取消';
     if (ui.splitEdit) {
       cardHint.textContent = '编辑切分 · 保存后更新这条标注' + (touch ? '' : ' · Esc 取消');
@@ -2224,86 +2324,121 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       announce('待标注：' + word[0] + '，' + posLabel(word[2]) + '，' + (word[3] || ''));
     }
   }
+  function renderIdleCard() {
+    var e = cardTargetEntry();
+    if (!e) {
+      cardEl.dataset.state = 'idle';
+      setCardMode('idle');
+      cardChip.textContent = '拆分标注 · 1~3 份';
+      cardLevel.textContent = '';
+      wordRow.style.fontSize = '';
+      wordRow.innerHTML = '<span class="idle-hint">' + idleHint() + '</span>';
+      wordMeta.hidden = true; wordMeta.textContent = '';
+      piecePreview.hidden = true; piecePreview.innerHTML = '';
+      cardHint.textContent = idleSubhint();
+      cardActionsAlt.innerHTML = state.entries.length
+        ? altActionsHtml([{ key: 'seal', label: isFull() ? '封箱并开始新箱' : '封箱', kind: isFull() ? 'primary' : 'ghost' }])
+        : '';
+      ui.announcedTarget = null;
+      return;
+    }
+    var w = findWord(e.w) || [e.w, '', '', '', 'cet4', ''];
+    var order = state.entries.indexOf(e) + 1;
+    cardEl.dataset.state = 'peek';
+    setCardMode('peek');
+    cardChip.textContent = '已点亮 · 第 ' + order + ' 个';
+    cardLevel.textContent = w[4] === 'cet6' ? 'CET6 新增' : 'CET4';
+    wordRow.style.fontSize = fitFontPeek(e.w.length) + 'px';
+    wordRow.innerHTML = wordCharsHtml(e.w);
+    wordMeta.textContent = (w[1] ? '/' + w[1] + '/ · ' : '') + posLabel(w[2]) + ' · ' + w[3];
+    piecePreview.hidden = false;
+    piecePreview.innerHTML = piecesHtml(e.pieces);
+    cardHint.textContent = isFull()
+      ? '本箱已满 · 先「封箱」再开始新箱'
+      : '点「改词」替换 · 「编辑切分」调整拆分 · 点空位继续标注';
+    var actions = [
+      { key: 'replace', label: '改词' },
+      { key: 'split', label: '编辑切分' },
+      { key: 'extinguish', label: '熄灭', danger: true },
+    ];
+    actions.push({ key: 'seal', label: '封箱', kind: isFull() ? 'primary' : 'ghost' });
+    cardActionsAlt.innerHTML = altActionsHtml(actions);
+    if (ui.announcedTarget !== e.p) {
+      ui.announcedTarget = e.p;
+      announce('已点亮的词：' + e.w + '，拆分 ' + e.pieces.join(' / '));
+    }
+  }
   function setBtn(el, on) { el.disabled = !on; }
 
-  /* ---------------------------------------------------------------- dock */
-  function renderDock() {
-    var sealedView = ui.viewSealed != null;
-    var viewEntries = currentViewEntries();
-    var full = isFull();
-    var primary = '', secondary = '', tone = '', actions = [];
-
-    if (ui.train) { dockEl.innerHTML = ''; return; }
-
-    if (ui.flash) {
-      primary = ui.flash.primary; secondary = ui.flash.secondary; tone = 'tone-word tone-flash';
-    } else if (ui.pinned != null) {
-      var pe = null, peOrder = 0;
-      for (var i = 0; i < viewEntries.length; i++) {
-        if (viewEntries[i].p === ui.pinned) { pe = viewEntries[i]; peOrder = i + 1; break; }
-      }
-      if (pe) {
-        primary = pe.w;
-        secondary = '第 ' + peOrder + ' 个点亮 · ' +
-          (sealedView ? '第 ' + ui.viewSealed + ' 箱（只读）' : '第 ' + state.boxNo + ' 箱') +
-          ' · ' + pe.pieces.join(' / ') + '（' + pe.pieces.length + ' 份）';
-        tone = 'tone-word';
-        if (!sealedView) {
-          actions = [{ key: 'replace', label: '改词' }, { key: 'extinguish', label: '熄灭', danger: true }];
+  /* ---------------------------------------------------------------- dock
+     只读锚点：显示「你点的那颗星」或「最近一次点亮的词」，没有操作、不闪、不改变几何。
+     长词按可用宽度缩字号，绝不把页面撑宽。 */
+  function dockTarget() {
+    if (ui.viewSealed != null) {
+      var box = state.sealed.filter(function (b) { return b.boxNo === ui.viewSealed; })[0];
+      if (ui.pinned != null && box) {
+        for (var i = 0; i < box.entries.length; i++) {
+          if (box.entries[i].p === ui.pinned) {
+            return { w: box.entries[i].w, pieces: box.entries[i].pieces, order: i + 1, boxNo: box.boxNo, sealed: true };
+          }
         }
-      } else {
-        ui.pinned = null;
       }
-    } else if (ui.selected != null && ui.current) {
-      primary = ui.replace ? '改词中' : (ui.splitEdit ? '编辑切分中' : '空位已选中');
-      secondary = ui.replace
-        ? '「' + ui.replace.old.w + '」→「' + ui.current[0] + '」· 保存后替换'
-        : (ui.splitEdit ? '正在调整「' + ui.current[0] + '」的切分' : '正在标注「' + ui.current[0] + '」· 保存后点亮这个点');
-    } else if (sealedView) {
-      primary = '第 ' + ui.viewSealed + ' 箱 · 已封存';
-      secondary = viewEntries.length + ' 词 · 只读回看 · 点已点亮的点读标签';
-    } else if (full) {
-      primary = '本箱已满';
-      secondary = '满 ' + state.capacity + ' 词 · 封箱后新箱复用同一张图';
-    } else if (ui.hover != null) {
-      var he = null;
-      for (var j = 0; j < viewEntries.length; j++) if (viewEntries[j].p === ui.hover) he = viewEntries[j];
-      if (he) { primary = he.w; secondary = '点击固定读数'; tone = 'tone-word'; }
-      else if (sealedView) { primary = '空位 · 未写入'; secondary = '封存箱只读 · 点已点亮的点读标签'; }
-      else { primary = '空位 · 未写入'; secondary = '点击它，为下一个待标注词选一个位置'; }
-    } else if (state.entries.length === 0) {
-      primary = '点空位 → 标注 → 点亮';
-      secondary = '第 ' + state.boxNo + ' 箱 · 目标 ' + state.capacity + ' 词 · 点位固定';
+      return null;
+    }
+    if (ui.pinned != null) {
+      var e = entryAt(ui.pinned);
+      if (e) return { w: e.w, pieces: e.pieces, order: state.entries.indexOf(e) + 1, boxNo: state.boxNo, sealed: false };
+      ui.pinned = null;
+    }
+    var a = ui.anchor;
+    if (a && a.kind === 'word') return { w: a.w, pieces: a.pieces, order: a.order, boxNo: a.boxNo, sealed: false };
+    return null;
+  }
+  function dockMeta(t) {
+    if (!t) return '';
+    return '第 ' + t.order + ' 个点亮 · ' +
+      (t.sealed ? '第 ' + (ui.viewSealed != null ? ui.viewSealed : t.boxNo) + ' 箱（只读）' : '第 ' + (t.boxNo || state.boxNo) + ' 箱') +
+      ' · ' + t.pieces.join(' / ') + '（' + t.pieces.length + ' 份）';
+  }
+  function fitDockWord() {
+    var el = dockEl.querySelector('.dock-primary');
+    if (!el || el.classList.contains('quiet')) return;
+    el.style.fontSize = '';
+    var avail = el.clientWidth;
+    if (!avail) return;
+    var full = el.scrollWidth;
+    if (full > avail + 1) {
+      var cur = parseFloat(getComputedStyle(el).fontSize) || 22;
+      var next = Math.max(13, Math.floor(cur * (avail / full) * 10) / 10);
+      el.style.fontSize = next + 'px';
+    }
+  }
+  function renderDock() {
+    if (ui.train) { dockEl.innerHTML = ''; return; }
+    var t = dockTarget();
+    var primary, secondary = '', quiet = false;
+    if (t) {
+      primary = t.w;
+      secondary = dockMeta(t);
+    } else if (ui.viewSealed != null) {
+      primary = '第 ' + ui.viewSealed + ' 箱 · 只读回看';
+      quiet = true;
+    } else if (ui.anchor && ui.anchor.kind === 'label') {
+      primary = ui.anchor.label;
+      quiet = true;
     } else {
-      primary = '继续点空位，或点已点亮的星读词';
-      secondary = '第 ' + state.boxNo + ' 箱 · 已点亮 ' + state.entries.length + ' / ' + state.capacity;
+      primary = '点空位 → 标注 → 点亮';
+      quiet = true;
     }
-
-    /* 封箱入口独立于 flash/hover：满箱或已有词时都保留，避免读数条提示把按钮压掉 */
-    /* 注意：点位 0 是合法值，判断 pin 必须用 == null，不能用 !ui.pinned（M1-12） */
-    if (!sealedView && !ui.current && ui.pinned == null && state.entries.length > 0) {
-      actions = [{ key: 'seal', label: '封箱', kind: full ? 'primary' : '' }];
-    }
-    /* 满箱时点亮的点被 pin 住（改词/熄灭）也要保留封箱主按钮（M1-12：追加，不覆盖） */
-    if (!sealedView && full && ui.pinned != null && !ui.current) {
-      actions = actions.concat([{ key: 'seal', label: '封箱', kind: 'primary' }]);
-    }
-    if (!sealedView && full && ui.hover != null && ui.pinned == null && !ui.current) {
-      secondary = '满 ' + state.capacity + ' 词 · 先封箱再继续';
-    }
-
-    var actionsHtml = actions.map(function (a) {
-      return '<button class="btn-mini ' + (a.kind || '') + (a.danger ? ' danger' : '') + '" data-action="' + a.key + '">' + esc(a.label) + '</button>';
-    }).join('');
-    dockEl.setAttribute('aria-live', ui.hover != null ? 'off' : 'polite');
+    dockEl.setAttribute('aria-live', 'off');
     dockEl.innerHTML =
       '<div class="dock-inner">' +
         '<div class="dock-text">' +
-          '<div class="dock-primary ' + (tone || '') + '">' + esc(primary) + '</div>' +
-          '<div class="dock-secondary">' + esc(secondary) + '</div>' +
+          '<div class="dock-primary' + (quiet ? ' quiet' : '') + '">' + esc(primary) + '</div>' +
+          (secondary ? '<div class="dock-secondary">' + esc(secondary) + '</div>' : '') +
         '</div>' +
-        '<div class="dock-actions">' + actionsHtml + '</div>' +
       '</div>';
+    fitDockWord();
   }
 
   /* ---------------------------------------------------------------- header / popover */
@@ -2602,6 +2737,7 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     state.pointer = 0;
     state.boxNo = Math.max(state.boxNo, boxNo);
     added.boxNo = state.boxNo;                    // 新封箱号与当前箱冲突时当前箱顺延，toast 里说明（M1-10 方案 A）
+    refreshAnchorFromEntries();
     saveState(); renderAll();
     return added;
   }
@@ -2613,9 +2749,11 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     var savedTemplate = state.template;
     state = sanitize(JSON.parse(JSON.stringify(imp)));
     rebuildPool();
-    var mode = isMobileLayout() ? 'scroll' : 'fit';
-    if (!savedTemplate || savedTemplate.mode !== mode) state.template = generateTemplate();
-    else state.template = savedTemplate;
+    /* 点位一旦生成就保留（导入也一样）：只更新映射，不重排 */
+    if (savedTemplate && Array.isArray(savedTemplate.points) && savedTemplate.points.length === MAP_POINTS) {
+      state.template = savedTemplate;
+    }
+    refreshAnchorFromEntries();
     saveState({ sync: true }); renderAll();
   }
   function applyImport(mode) {
@@ -2682,6 +2820,22 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     ui.cuts = [];
   }
 
+  /* 底栏锚点：只记录「哪个词 / 几份 / 第几个」，不参与任何操作（操作在卡片里） */
+  function anchorFromEntry(entry) {
+    if (!entry) { ui.anchor = null; return; }
+    var idx = state.entries.indexOf(entry);
+    if (idx < 0) { ui.anchor = null; return; }
+    ui.anchor = {
+      kind: 'word', p: entry.p, w: entry.w, pieces: entry.pieces.slice(),
+      order: idx + 1, boxNo: state.boxNo,
+    };
+  }
+  function refreshAnchorFromEntries() {
+    if (!state.entries.length) { ui.anchor = null; return; }
+    anchorFromEntry(state.entries[state.entries.length - 1]);
+  }
+  function anchorLabel(text) { ui.anchor = { kind: 'label', label: text }; }
+
   function selectPoint(p) {
     if (ui.viewSealed != null || ui.train) return;
     if (isFull()) { toast('本箱已满 · 先封箱再继续'); return; }
@@ -2690,7 +2844,6 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     if (!ui.current) { toast('词池已空'); return; }
     ui.selected = p;
     ui.pinned = null;
-    ui.hover = p;
     renderAll();
     scheduleEnsureVisible();
   }
@@ -2712,17 +2865,14 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       ring.parentNode.removeChild(ring);
     }
   }
+  /* 点星永远不打断标注：有草稿时只更新底栏锚点，卡片保持草稿（留空设计） */
   function pinPoint(p) {
-    /* 标注进行中点星：两套上下文会被静默打乱，先要求保存/取消（M1-14） */
-    if (ui.current || ui.selected != null || ui.splitEdit || ui.replace) {
-      toast('先保存或取消当前标注，再查看别的点');
-      return;
-    }
     var prev = ui.pinned;
     ui.pinned = prev === p ? null : p;
     updatePinClass(prev);
     updatePinClass(ui.pinned);
     renderDock();
+    renderCard();
   }
 
   function toggleCut(pos) {
@@ -2760,7 +2910,8 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
         resetTransientUi(); renderAll(); return;
       }
       se.pieces = piecesFromCuts(se.w, ui.cuts);
-      ui.splitEdit = null; ui.current = null; ui.cuts = []; ui.selected = null;
+      ui.splitEdit = null; ui.current = null; ui.cuts = []; ui.selected = null; ui.pinned = null;
+      anchorFromEntry(se);
       toast('切分已更新');
       saveState(); renderAll(); return;
     }
@@ -2777,11 +2928,12 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       var newWord = ui.current[0], oldWord = oldEntry.w;
       /* 记下改词前的那一条，Ctrl+Z 才能真的回滚到旧词 + 旧切分（M1-11） */
       ui.lastReplace = { p: oldEntry.p, index: idx, old: { w: oldEntry.w, pieces: oldEntry.pieces.slice(), t: oldEntry.t }, newWord: newWord };
-      ui.replace = null; ui.current = null; ui.cuts = []; ui.selected = null; ui.pinned = null; ui.hover = null;
+      ui.replace = null; ui.current = null; ui.cuts = []; ui.selected = null; ui.pinned = null;
       ui.lastExtinguish = null;
       ui.anim = oldEntry.p;
-      flash(newWord, '已替换「' + oldWord + '」· 旧词回到词池');
+      anchorFromEntry(state.entries[state.entries.length - 1]);
       saveState(); renderAll();
+      toast('已替换「' + oldWord + '」→「' + newWord + '」', { ms: 4200, actionLabel: '撤销', onAction: undo });
       setTimeout(function () { if (ui.anim === oldEntry.p) { ui.anim = null; layoutMap(); } }, 820);
       return;
     }
@@ -2798,11 +2950,13 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     state.entries.push({ p: p, w: word, pieces: pieces, t: Date.now() });
     state.pointer = (ui.currentIndex + 1) % POOL.length;
     var order = state.entries.length;
-    ui.current = null; ui.selected = null; ui.cuts = []; ui.pinned = null; ui.hover = null;
+    ui.current = null; ui.selected = null; ui.cuts = []; ui.pinned = null;
     ui.lastExtinguish = null;
     ui.lastReplace = null;
     ui.anim = p;
-    flash(word, '已点亮 · 第 ' + order + ' 个 · ' + pieces.join(' / ') + '（' + pieces.length + ' 份）');
+    /* 底栏锚点 + 点位动画就是全部反馈；不再弹 toast、不再闪读数条 */
+    anchorFromEntry(state.entries[state.entries.length - 1]);
+    announce('已点亮：' + word + '，' + pieces.join(' / '));
     saveState(); renderAll();
     setTimeout(function () { if (ui.anim === p) { ui.anim = null; layoutMap(); } }, 820);
   }
@@ -2814,8 +2968,9 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       var le = ui.lastExtinguish;
       ui.lastExtinguish = null;
       if (!entryAt(le.entry.p)) state.entries.splice(Math.min(le.index, state.entries.length), 0, le.entry);
-      ui.pinned = null; ui.hover = null;
-      flash(le.entry.w, '已撤回熄灭 · 词回到图上');
+      ui.pinned = null;
+      anchorFromEntry(entryAt(le.entry.p));
+      toast('已恢复「' + le.entry.w + '」');
       saveState(); renderAll(); return;
     }
     /* 改词后的 Ctrl+Z 要回滚到旧词 + 旧切分，而不是「删掉新词留空点」（M1-11） */
@@ -2829,16 +2984,18 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       state.entries.splice(Math.min(lr.index, state.entries.length), 0, { p: lr.p, w: lr.old.w, pieces: lr.old.pieces.slice(), t: lr.old.t });
       var pi = poolIndex(lr.old.w);
       if (pi >= 0) state.pointer = pi;
-      ui.pinned = null; ui.hover = null;
-      flash(lr.old.w, '已撤回改词 · 「' + lr.newWord + '」回到词池');
+      ui.pinned = null;
+      anchorFromEntry(entryAt(lr.p));
+      toast('已恢复「' + lr.old.w + '」');
       saveState(); renderAll(); return;
     }
     if (!state.entries.length) { toast('没有可撤回的放置'); return; }
     var last = state.entries.pop();
     var idx = poolIndex(last.w);
     if (idx >= 0) state.pointer = idx;
-    ui.pinned = null; ui.hover = null;
-    flash(last.w, '已撤回 · 该点重新变回空位');
+    ui.pinned = null;
+    refreshAnchorFromEntries();
+    toast('已撤回「' + last.w + '」');
     saveState(); renderAll();
   }
 
@@ -2851,11 +3008,12 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     state.entries.splice(idx, 1);
     var pi = poolIndex(w);
     if (pi >= 0) state.pointer = pi;
-    ui.pinned = null; ui.hover = null;
+    ui.pinned = null;
     ui.lastReplace = null;
     ui.lastExtinguish = { entry: { p: entry.p, w: entry.w, pieces: entry.pieces.slice(), t: entry.t }, index: idx };
-    toast('已熄灭「' + w + '」· Ctrl+Z 可撤回');
+    refreshAnchorFromEntries();
     saveState(); renderAll();
+    toast('已熄灭「' + w + '」', { ms: 4200, actionLabel: '撤销', onAction: undo });
   }
 
   function startReplace(p) {
@@ -2889,12 +3047,14 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   function performSeal() {
     if (!state.entries.length) return;
     var boxNo = state.boxNo;
+    var count = state.entries.length;
     state.sealed.push({ boxNo: boxNo, capacity: state.capacity, entries: state.entries.slice(), sealedAt: new Date().toISOString(), train: sanitizeTrain(null) });
     state.boxNo++;
     state.entries = [];
     resetTransientUi();
-    flash('第 ' + boxNo + ' 箱已封存', '箱库 +1 · 可在箱库选择这一箱训练');
+    anchorLabel('第 ' + boxNo + ' 箱已封存 · ' + count + ' 词');
     saveState(); renderAll();
+    toast('第 ' + boxNo + ' 箱已封存 · ' + count + ' 词', { ms: 3600, actionLabel: '去箱库', onAction: function () { openDrawer('boxes'); } });
   }
   function sealBox() {
     if (ui.viewSealed != null) { toast('回看中不能封箱'); return; }
@@ -3082,6 +3242,9 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       drawerBody.innerHTML =
         '<div class="set-field"><span>词库范围<small>决定「下一个待标注词」从哪里取</small></span>' +
         '<select id="setScope"><option value="all">全部 7838</option><option value="cet4">四级 6127</option><option value="cet6">六级新增 1711</option></select></div>' +
+        '<div class="set-field"><span>标注起点<small id="startPointInfo">' + esc(startPointLabel()) + '</small></span>' +
+        '<span class="set-inline"><input id="setStart" type="text" inputmode="text" autocomplete="off" placeholder="单词或序号" aria-label="标注起点：输入单词或序号">' +
+        '<button class="btn-mini" data-action="set-start">设为起点</button></span></div>' +
         '<div class="set-field"><span>发音<small>训练时使用浏览器 TTS</small></span><input type="checkbox" id="setSpeak"></div>' +
         '<div class="set-field"><span>音效<small>对/错提示音</small></span><input type="checkbox" id="setSound"></div>' +
         '<div class="wrong-actions" style="margin-top:14px">' +
@@ -3094,11 +3257,12 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
         '<button class="btn-mini danger" data-action="reset-all">清空本机数据</button>' +
         '</div>' +
         '<p class="set-note" id="storageUsage">' + esc(storageUsageText()) + '</p>' +
+        '<p class="set-note">标注起点只决定「下一个待标注词」从词库哪个位置开始取，不会删除已写入的词；导出/导入随存档一起走。</p>' +
         '<p class="set-note">存档在 localStorage：换浏览器/清站点数据会丢，请定期「导出存档」；PWA 安装后离线可用，多设备用「合并导入」。</p>' +
         '<div class="about-block"><b>点图 · 标注记忆</b> M1<br>' +
         '词库 ' + TOTAL_WORDS + ' 词（CET4 6127 + CET6 新增 1711）<br>' +
         '来源：ECDICT (MIT) / endict (MIT) / KyleBing (BSD-3)<br>' +
-        '地图固定 400 点 · 每箱 100–400 词 · 训练 = 已封箱的箱子<br>' +
+        '地图固定 400 点（生成后不再重排） · 每箱 100–400 词 · 训练 = 已封箱的箱子<br>' +
         '间隔重复：1 → 3 → 7 → 16 → 35 → 75 → 150 → 365 天</div>';
       $('setScope').value = scope;
       $('setSpeak').checked = !!state.settings.speak;
@@ -3503,40 +3667,61 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     $('trainAgain').textContent = t.boxNo != null ? '再练一轮' : '再练一遍';
   }
 
-  /* ---------------------------------------------------------------- toast / flash */
-  function toast(msg, ms) {
-    toastEl.textContent = msg;
+  /* ---------------------------------------------------------------- toast
+     唯一的“一次性结果”通道：可带一个撤销/后续动作；底栏不再有 flash 大字。 */
+  var toastAction = null;
+  function hideToast() {
+    if (ui.toastTimer) { clearTimeout(ui.toastTimer); ui.toastTimer = null; }
+    toastEl.hidden = true;
+    toastEl.textContent = '';
+    toastEl.classList.remove('has-action');
+    toastAction = null;
+  }
+  function toast(msg, opts) {
+    opts = typeof opts === 'number' ? { ms: opts } : (opts || {});
+    toastEl.textContent = '';
+    var span = document.createElement('span');
+    span.className = 'toast-text';
+    span.textContent = msg;
+    toastEl.appendChild(span);
+    if (opts.actionLabel) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = opts.actionLabel;
+      btn.addEventListener('click', function () {
+        var fn = toastAction;
+        hideToast();
+        if (typeof fn === 'function') fn();
+      });
+      toastEl.appendChild(btn);
+      toastEl.classList.add('has-action');
+      toastAction = opts.onAction || null;
+    } else {
+      toastEl.classList.remove('has-action');
+      toastAction = null;
+    }
     toastEl.hidden = false;
     if (ui.toastTimer) clearTimeout(ui.toastTimer);
-    ui.toastTimer = setTimeout(function () { toastEl.hidden = true; }, ms || 2000);
-  }
-  function flash(primary, secondary) {
-    ui.flash = { primary: primary, secondary: secondary };
-    if (ui.flashTimer) clearTimeout(ui.flashTimer);
-    ui.flashTimer = setTimeout(function () { ui.flash = null; renderDock(); }, 2800);
+    ui.toastTimer = setTimeout(hideToast, opts.ms || 2400);
   }
   /* PWA 注册脚本（生产包）通过自定义事件提示失败，不直接碰内部实现（M1-24） */
   window.addEventListener('pointfield-toast', function (event) {
     if (event && event.detail) toast(String(event.detail), 5000);
   });
 
-  /* ---------------------------------------------------------------- events */
-  mapEl.addEventListener('pointermove', function (event) {
-    var g = event.target && event.target.closest ? event.target.closest('.pt') : null;
-    var i = g ? Number(g.dataset.i) : null;
-    if (i === ui.hover) return;
-    ui.hover = i;
-    renderDock();
-  });
-  mapEl.addEventListener('pointerleave', function () {
-    if (ui.hover == null) return;
-    ui.hover = null;
-    renderDock();
-  });
+  /* ---------------------------------------------------------------- events
+     底栏是只读锚点，不挂任何操作；操作统一在卡片里（data-action）。 */
   mapEl.addEventListener('click', function (event) {
     var g = event.target && event.target.closest ? event.target.closest('.pt') : null;
     if (!g) {
-      if (ui.pinned != null) { var was = ui.pinned; ui.pinned = null; updatePinClass(was); renderDock(); }
+      if (ui.pinned != null) {
+        var was = ui.pinned;
+        ui.pinned = null;
+        updatePinClass(was);
+        renderDock();
+        renderCard();
+      }
       return;
     }
     var p = Number(g.dataset.i);
@@ -3556,13 +3741,15 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   clearBtn.addEventListener('click', clearCuts);
   saveBtn.addEventListener('click', savePlacement);
 
-  dockEl.addEventListener('click', function (event) {
+  cardEl.addEventListener('click', function (event) {
     var btn = event.target && event.target.closest ? event.target.closest('[data-action]') : null;
     if (!btn) return;
     var action = btn.dataset.action;
-    if (action === 'seal') sealBox();
-    else if (action === 'replace' && ui.pinned != null) startReplace(ui.pinned);
-    else if (action === 'extinguish' && ui.pinned != null) extinguish(ui.pinned);
+    if (action === 'seal') { sealBox(); return; }
+    if (ui.viewSealed != null) return;
+    if (action === 'replace' && ui.pinned != null) { startReplace(ui.pinned); return; }
+    if (action === 'split' && ui.pinned != null) { startSplitEdit(ui.pinned); return; }
+    if (action === 'extinguish' && ui.pinned != null) { extinguish(ui.pinned); return; }
   });
 
   boxPill.addEventListener('click', function (event) {
@@ -3630,13 +3817,12 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       if (!parsed || parsed.v !== 4) return;
       if (saveDirty) return;                  // 本窗口有未落盘改动时不让同步覆盖
       var keepTemplate = state.template;
-      var keepMode = isMobileLayout() ? 'scroll' : 'fit';
       resetTransientUi();
       ui.viewSealed = null;                   // 同步后的存档不一定有回看的那一箱（M1-09）
       state = sanitize(parsed);
       rebuildPool();
-      if (keepTemplate && keepTemplate.mode === keepMode) state.template = keepTemplate;
-      else if (!state.template || state.template.mode !== keepMode) state.template = generateTemplate();
+      if (keepTemplate && Array.isArray(keepTemplate.points) && keepTemplate.points.length === MAP_POINTS) state.template = keepTemplate;
+      refreshAnchorFromEntries();
       renderAll();
       toast('另一个标签页更新了存档 · 已同步');
     } catch (e) { /* ignore */ }
@@ -3680,6 +3866,10 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
       else if (a === 'csv') exportCsv();
       else if (a === 'restore-backup') restoreAutoBackup();
       else if (a === 'reset-all') clearAllData();
+      else if (a === 'set-start') {
+        var input = $('setStart');
+        setAnnotationStart(input ? input.value : '');
+      }
       return;
     }
     var editBtn = t.closest('[data-edit]');
@@ -3696,6 +3886,12 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
     if (id === 'setScope') applyScope(event.target.value);
     else if (id === 'setSpeak') { state.settings.speak = !!event.target.checked; saveState(); toast(event.target.checked ? '训练发音已开启' : '训练发音已关闭'); }
     else if (id === 'setSound') { state.settings.sound = !!event.target.checked; saveState(); toast(event.target.checked ? '音效已开启' : '音效已关闭'); }
+  });
+  drawerBody.addEventListener('keydown', function (event) {
+    if (event.target && event.target.id === 'setStart' && event.key === 'Enter') {
+      event.preventDefault();
+      setAnnotationStart(event.target.value);
+    }
   });
 
   $('trainQuit').addEventListener('click', endTrainingUi);
@@ -3791,28 +3987,9 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   });
 
   var resizeTimer = null;
-  function needsTemplateRebuild() {
-    if (!state.template) return true;
-    var mode = isMobileLayout() ? 'scroll' : 'fit';
-    if (state.template.mode !== mode) return true;
-    if (!Number.isFinite(state.template.genW) || !Number.isFinite(state.template.genH)) return true;
-    var W = Math.round(stageEl.clientWidth || 0);
-    var H = Math.round(stageEl.clientHeight || 0);
-    if (Math.abs(W - state.template.genW) > 24) return true;
-    if (mode === 'fit') return Math.abs(H - state.template.genH) > 24;
-    /* 手机滑动模式：地址栏 / 键盘 / 底部工具栏只改 H，不改点位 → 不重建（M1-01） */
-    return Math.abs(Math.max(H, Math.round(W * 3.2)) - state.template.plateH) > 24;
-  }
+  /* resize 只重新映射（viewBox / hitR / 底栏字号），从不重排点位（用户要求：位置固定） */
   function applyResize() {
-    var rebuilt = false;
-    if (needsTemplateRebuild()) {
-      /* 只换模板，不 reset 临时状态：正在标注的词 / 刀口 / pin 都保留（M1-07） */
-      state.template = generateTemplate();
-      rebuilt = true;
-      saveState();
-    }
     renderAll();
-    if (rebuilt) scheduleEnsureVisible();
     if (ui.capOpen) placePopover(capPopover, boxPill);
     if (ui.menuOpen) placePopover(menuPopover, menuBtn);
   }
@@ -3822,7 +3999,7 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   }
   window.addEventListener('resize', onResize);
   if (window.ResizeObserver) new ResizeObserver(onResize).observe(stageEl);
-  /* 手指按下的瞬间别让挂起的 resize 重建打断点击：推迟到交互结束后（M1-01） */
+  /* 手指按下的瞬间别让挂起的 resize 重绘打断点击：推迟到交互结束后 */
   mapEl.addEventListener('pointerdown', function () {
     if (!resizeTimer) return;
     clearTimeout(resizeTimer);
@@ -3855,6 +4032,7 @@ window.WORD_DATA={"meta":{"generated":"2026-11-17","source":"deepseek_v4_tokeniz
   /* ---------------------------------------------------------------- init */
   function init() {
     /* 先把读数条/卡片撑到最终高度再测 stage，避免首次布局多重建一次（M1-41） */
+    refreshAnchorFromEntries();
     renderDock();
     renderHeader();
     renderCard();

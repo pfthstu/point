@@ -1,5 +1,5 @@
 /* 点图 · 标注记忆 service worker（离线缓存） */
-const CACHE = 'pointfield-mwka4p65';
+const CACHE = 'pointfield-mwknyfc5';
 const ASSETS = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
